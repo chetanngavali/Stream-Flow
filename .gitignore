@@ -1,0 +1,59 @@
+# Source code directories (Protected - do not push to public repo)
+apps/
+api/
+packages/
+tests/
+database/
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Builds
+dist/
+build/
+.vite/
+apps/**/dist/
+apps/**/build/
+
+# Environment
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+playwright-report/
+test-results/
+
+# Temporary
+.tmp/
+.temp/
+apps/api/data/cache/
+
+# Secrets
+*.pem
+*.key
+*.crt
+
+# Cache
+.cache/
