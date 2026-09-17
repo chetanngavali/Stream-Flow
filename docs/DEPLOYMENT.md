@@ -77,7 +77,7 @@ This pushes all 26 source files (`.gs` and `.html`) to the Google Apps Script cl
 ### 4.2 Deploy as a Web Application
 Deploy a new version to the existing deployment ID:
 ```bash
-clasp deploy -i AKfycbzA2Y70HkzRPG2dznStNi7TLI-Riea0uJP7iRIYW872p20FfUzetWCFF_xqNYvPz1eqsA -d "StreamFlow_Production_V9"
+clasp deploy -i AKfycbzA2Y70HkzRPG2dznStNi7TLI-Riea0uJP7iRIYW872p20FfUzetWCFF_xqNYvPz1eqsA -d "StreamFlow_Production_V10"
 ```
 
 If creating a brand-new deployment:
@@ -89,6 +89,7 @@ Your live Web App URL will follow the format:
 ```text
 https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec
 ```
+*Current Active Deployment:* `AKfycbzA2Y70HkzRPG2dznStNi7TLI-Riea0uJP7iRIYW872p20FfUzetWCFF_xqNYvPz1eqsA @10`
 
 ---
 

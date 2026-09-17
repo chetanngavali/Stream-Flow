@@ -5,17 +5,17 @@
 [![Google Sheets](https://img.shields.io/badge/Google%20Sheets-Database-34A853?logo=googlesheets&logoColor=white)](https://www.google.com/sheets/about/)
 [![Google Drive](https://img.shields.io/badge/Google%20Drive-Asset%20Storage-FBBC05?logo=googledrive&logoColor=white)](https://www.google.com/drive/)
 [![HLS.js](https://img.shields.io/badge/Player-HLS.js%20Direct-FF6B6B)](https://github.com/video-dev/hls.js/)
-[![Security: Hardened](https://img.shields.io/badge/Security-Hardened%20v9-success)](SECURITY.md)
+[![Security & Mobile: Hardened](https://img.shields.io/badge/Release-v10%20(Mobile%20Polish%20%2B%20Hardened)-success)](SECURITY.md)
 
-> **StreamFlow** is a serverless, enterprise-hardened Live TV catalog and streaming platform built on **Google Apps Script**, **Google Sheets** (as a high-performance relational database), **Google Drive** (asset & backup storage), and **HTML Service**. It delivers an OTT-caliber streaming experience with direct client-side **HLS.js** playback, full user account management, self-service password recovery via Google MailApp, and a 2FA-secured administrative console capable of ingesting 10,000+ channels.
+> **StreamFlow** is a serverless, enterprise-hardened Live TV catalog and streaming platform built entirely on **Google Apps Script**, **Google Sheets** (as a high-performance relational database), **Google Drive** (asset & backup storage), and **HTML Service**. It delivers an OTT-caliber streaming experience with direct client-side **HLS.js** playback, full user account management, self-service password recovery via Google MailApp, a comprehensive mobile-optimized design system, and a 2FA-secured administrative console capable of ingesting 10,000+ channels.
 
 ---
 
 ## 🌐 Live Web App
 
 * **Production URL:** [https://script.google.com/macros/s/AKfycbzA2Y70HkzRPG2dznStNi7TLI-Riea0uJP7iRIYW872p20FfUzetWCFF_xqNYvPz1eqsA/exec](https://script.google.com/macros/s/AKfycbzA2Y70HkzRPG2dznStNi7TLI-Riea0uJP7iRIYW872p20FfUzetWCFF_xqNYvPz1eqsA/exec)
-* **Deployment Identity:** `USER_DEPLOYING` (executes as owner, accessible to anyone)
-* **Current Version:** `@9` (Security Hardened)
+* **Deployment Identity:** `USER_DEPLOYING` (executes as owner, publicly accessible)
+* **Current Version:** `@10` (SyntaxError fix, explicit window globals & full Mobile UI overhaul)
 
 ---
 
@@ -37,16 +37,22 @@
 
 ## ✨ Key Platform Features
 
-### 📺 Viewer Experience
+### 📺 Viewer Experience & Mobile UI
 * **Global Channel Catalog:** Discover thousands of live channels organized across 178 countries and genres (News, Sports, Movies, Music, Documentary, Kids).
 * **Direct HLS.js Player:** High-performance HTML5 video player with adaptive bitrate, buffer diagnostics, error recovery, and fullscreen support.
+* **Mobile-First Experience:**
+  - **2-Column Responsive Grid:** Fluid mobile channel cards with crisp logos, live indicators, and full-width "Watch Live" buttons.
+  - **Glassmorphic Bottom Navigation:** Fixed bottom bar with 6 touch targets, active indicators, and iPhone safe-area inset support (`env(safe-area-inset-bottom)`).
+  - **Swipeable Category Pills:** Horizontal touch carousel with hidden scrollbars for rapid genre filtering.
+  - **Mobile 16:9 Player Layout:** Auto-scaling video container capped at 55vh with stacked metadata and single-tap favorites.
+  - **Touch Modals & Floating Toasts:** Centered, auto-scrolling mobile dialogs with touch-padded inputs and floating toast alerts.
 * **Instant Search & Filters:** Sub-second search by channel name, country, or category with real-time UI filtering.
 * **Favorites & Watch History:** 1-click personal bookmarking and recently watched channels persisted securely in client `localStorage`.
 
 ### 👤 User Account & Authentication
 * **Member Registration & Login:** Email and password accounts stored with salted SHA-256 password hashing.
 * **Password Reset via MailApp:** Automated password reset links dispatched directly to user inboxes with 1-hour expiry tokens.
-* **Rate-Limited Email Protection:** Prevents spamming and Google Apps Script daily email quota exhaustion.
+* **Rate-Limited Email Protection:** Prevents spamming and Google Apps Script daily email quota exhaustion (max 3 reset requests per email per 10 minutes).
 
 ### 🛡️ 2FA Admin Management Console
 * **Two-Factor Authentication:** Requires Admin Email, Password, and a separate 2FA PIN generating cryptographically signed HMAC-SHA256 session tokens.
@@ -57,17 +63,43 @@
 
 ---
 
+## 📥 Adding & Ingesting 10,000+ Channels
+
+StreamFlow supports three seamless methods for loading massive channel playlists:
+
+### Method 1: Remote M3U URL Batch Ingest (Recommended)
+1. Open StreamFlow and click the **Admin** button (top header or mobile bottom bar).
+2. Authenticate with your Admin Email, Password, and 2FA PIN.
+3. Click the **Import M3U** button in the top toolbar.
+4. In the **Direct Remote M3U URL** section, paste a playlist URL (e.g. `https://iptv-org.github.io/iptv/index.m3u`).
+5. Click **Import URL Directly into Database**.
+6. The Apps Script backend fetches the playlist via `UrlFetchApp`, parses M3U headers (`#EXTINF`), and writes rows in atomic batches of **2,500 rows** using `LockService` mutex locks to ensure zero timeouts or database collisions.
+
+### Method 2: Direct Google Sheets Bulk Paste
+1. Open your Google Drive and open the **`StreamFlow Database`** spreadsheet.
+2. Switch to the **`Channels`** sheet tab.
+3. Paste rows directly below the frozen header matching the schema:
+   `id | name | logo | country | country_code | language | category | description | stream_url | stream_type | is_active | is_featured | sort_order | created_at | updated_at`
+4. StreamFlow automatically picks up the new channels on the next query (cache invalidates every 10 minutes, or instantly when updated via Admin UI).
+
+### Method 3: Drag-and-Drop Local M3U File
+1. In the Admin **Import M3U** modal, drag any `.m3u` or `.m3u8` file into the upload zone.
+2. StreamFlow parses the file client-side, presents a table preview of detected channels, and allows one-click bulk import into the Google Sheet.
+
+---
+
 ## 🔒 Security Architecture & Hardening
 
-StreamFlow has undergone a complete security audit and penetration test. Key safeguards implemented in the codebase:
+StreamFlow has undergone a complete security audit and penetration test (v10):
 
 1. **Strict Server-Side Authorization:** Every administrative operation enforces `requireAdmin(token)` on the server. User tokens (`role: 'user'`) are strictly segregated and rejected on admin endpoints.
 2. **Global Function Encapsulation:** Internal utility and credential-handling functions append a trailing underscore `_` (e.g. `getSigningSecret_`, `getScriptProperty_`, `setScriptProperty_`), making them invisible and inaccessible via `google.script.run`.
 3. **SSRF (Server-Side Request Forgery) Defense:** `validateFetchUrl(url)` blocks requests to loopback (`127.0.0.0/8`), local networks (`10.0.0.0/8`, `192.168.0.0/16`, `172.16.0.0/12`), cloud metadata (`169.254.169.254`, `metadata.google.internal`), and non-standard web ports.
 4. **Google Sheets Formula Injection Neutralization:** `sanitizeSheetCellValue(val)` prepends `'` to any cell value starting with `=`, `+`, `-`, `@`, `\t`, or `\r`, ensuring data is never executed as spreadsheet formulas.
 5. **XSS & DOM Context Breakout Protection:** Initial parameters safely escaped with `\u003c`, image URLs strictly validated to prevent `javascript:` execution, and modal parameters resolved by ID to avoid inline JSON injection.
-6. **Concurrency Locks:** Mutex locks via `LockService.getScriptLock()` prevent race condition collisions during batch writes.
-7. **Timing-Attack Resistance:** `secureCompare()` provides constant-time comparison for HMAC signatures, hashes, and PINs.
+6. **SyntaxError & ReferenceError Protection:** Standalone helper functions (`handleCardImgError`, `getChannelCardLogoHtml`, `getAdminTableLogoHtml`) and explicit global window exports (`window.Router`, `window.handleAdminBtnClick`, etc.) ensure zero runtime parse crashes in Google Apps Script's sandboxed iframe.
+7. **Concurrency Locks:** Mutex locks via `LockService.getScriptLock()` prevent race condition collisions during batch writes.
+8. **Timing-Attack Resistance:** `secureCompare()` provides constant-time comparison for HMAC signatures, hashes, and PINs.
 
 ---
 
@@ -121,8 +153,8 @@ Stream-Flow/
 │   ├── security.gs             # 2FA login, HMAC session tokens, user auth, reset email
 │   │
 │   ├── Index.html              # HTML shell, HLS.js CDN, SEO metadata, safe params
-│   ├── Styles.html             # Premium glassmorphic responsive design system
-│   ├── Scripts.html            # Client API client (Promises), router, player manager
+│   ├── Styles.html             # Vanilla CSS design system (desktop + comprehensive mobile UI)
+│   ├── Scripts.html            # Client API client (Promises), router, player manager, window exports
 │   ├── Components.html         # User auth, 2FA admin login, channel forms, modals, toasts
 │   ├── Header.html             # Navigation bar, brand logo, search trigger, auth buttons
 │   ├── Footer.html             # Responsive footer, legal links, copyright notices
@@ -137,7 +169,8 @@ Stream-Flow/
 │   ├── ARCHITECTURE.md         # Detailed technical architecture specification
 │   ├── DEPLOYMENT.md           # Clasp deployment, setupStreamFlow(), and configuration
 │   ├── API.md                  # Comprehensive google.script.run API reference
-│   └── SECURITY.md             # Security audit report, vulnerability matrix & policies
+│   ├── SECURITY.md             # Security audit report, vulnerability matrix & policies
+│   └── STREAMS.md              # Stream diagnostics, HLS architecture, and CORS policy
 │
 ├── DISCLAIMER.md               # Legal disclaimer & zero-hosting notice
 ├── DMCA.md                     # DMCA notice & takedown policy
@@ -150,7 +183,7 @@ Stream-Flow/
 
 ---
 
-## 🚀 Deployment & Operations
+## 🚀 Deployment & Operations Guide
 
 ### Prerequisites
 * Node.js 18+ and npm
@@ -170,13 +203,13 @@ cd StreamFlow
 clasp push -f
 
 # 3. Deploy new release version to the existing Web App deployment
-clasp deploy -i AKfycbzA2Y70HkzRPG2dznStNi7TLI-Riea0uJP7iRIYW872p20FfUzetWCFF_xqNYvPz1eqsA -d "Production_Hardened"
+clasp deploy -i AKfycbzA2Y70HkzRPG2dznStNi7TLI-Riea0uJP7iRIYW872p20FfUzetWCFF_xqNYvPz1eqsA -d "StreamFlow_Production_V10"
 ```
 
 ### Initializing the Database & Drive
 Open the Google Apps Script editor, select **`setupStreamFlow`** from the function dropdown, and click **Run**. This will automatically:
 1. Create the `StreamFlow` Google Drive folder hierarchy (`Channel Logos`, `Website Assets`, `Backups`).
-2. Create and format the `StreamFlow Database` spreadsheet with all required sheets and frozen headers.
+2. Create and format the `StreamFlow Database` spreadsheet with all 8 sheets and frozen headers.
 3. Register your Google account as the Super Admin.
 4. Populate starter reference categories, countries, and broadcast languages.
 

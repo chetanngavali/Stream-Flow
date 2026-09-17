@@ -104,3 +104,16 @@ StreamFlow enforces strict cryptographic segregation between standard users and 
 * **Zero Video Proxying:** StreamFlow NEVER acts as a media proxy or relay.
 * **Client-Side HLS Engine:** The client browser uses `HLS.js` directly against the broadcaster's authorized streaming servers.
 * **Adaptive Bitrate:** Automatically selects optimal stream bitrate based on the client's current bandwidth.
+
+### 2.6 Client-Side UI & Mobile Architecture (`Styles.html`, `Scripts.html`, `Header.html`)
+* **Responsive 2-Column Mobile Grid:** On viewports $\le 768\text{px}$, the channel catalog automatically transitions to a 2-column card layout (`grid-template-columns: repeat(2, 1fr)`) with compact badges, logos, truncated channel titles, and full-width "Watch Live" touch targets.
+* **Glassmorphic Bottom Navigation:** Fixed bottom bar featuring safe-area inset support for modern mobile devices (`env(safe-area-inset-bottom)`), active route indicators, and 6 evenly spaced touch targets (Home, Live TV, Search, Favorites, Account, Admin).
+* **Horizontal Touch Carousel:** Categories and tags render as a horizontal touch-scrollable pill container (`overflow-x: auto; -webkit-overflow-scrolling: touch;`) with hidden scrollbars for swipeable filtering.
+* **16:9 Mobile Video Player:** Auto-scaling video container capped at 55vh with stacked metadata, full-width favorite toggle, and adaptive related channels list.
+* **Explicit Global Window Exports:** Singletons and event handlers (`window.Router`, `window.handleAdminBtnClick`, `window.handleUserAuthBtnClick`, `window.openModal`, `window.closeModal`, etc.) are explicitly attached to `window` to ensure inline HTML event handlers in the sandbox iframe always resolve without `ReferenceError`.
+* **Safe Logo Error Handlers:** Image error fallbacks use dedicated helper functions (`handleCardImgError`, `getChannelCardLogoHtml`, `getAdminTableLogoHtml`) without multi-level template literal nesting, preventing unescaped newline `SyntaxError`s in browser JS engines.
+
+### 2.7 Google Apps Script Iframe & Sandbox Communication
+* **Warden Proxy Protocol:** Google Apps Script HTML Service wraps user code inside a sandboxed iframe (`https://n-*.script.googleusercontent.com/userCodeAppPanel`) embedded within the outer Apps Script page (`https://script.google.com`).
+* **Handshake Reliability:** Parent-to-iframe communication operates via `postMessage`. By eliminating client-side syntax errors during script evaluation, the user panel initializes promptly and maintains a stable postMessage handshake with the Google Warden security proxy.
+
