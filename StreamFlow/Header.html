@@ -43,22 +43,22 @@
       <!-- Right Header Actions -->
       <div class="sf-header-actions">
         <!-- Search Trigger -->
-        <div class="sf-search-trigger" onclick="Router.navigate('search')">
+        <div class="sf-search-trigger" onclick="Router.navigate('search')" title="Search Channels">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <span>Search...</span>
+          <span class="sf-search-label">Search...</span>
           <span class="sf-search-shortcut">/</span>
         </div>
 
         <!-- User Authentication & Account Button -->
-        <button class="sf-btn sf-btn-primary sf-btn-sm" id="btnHeaderUserAuth" onclick="handleUserAuthBtnClick()" style="padding: 7px 14px; font-size: 0.82rem; gap: 6px;">
+        <button class="sf-btn sf-btn-primary sf-btn-sm sf-header-user-btn" id="btnHeaderUserAuth" onclick="handleUserAuthBtnClick()" style="padding: 7px 14px; font-size: 0.82rem; gap: 6px;">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          <span id="headerUserAuthLabel">Sign In</span>
+          <span class="sf-header-btn-text" id="headerUserAuthLabel">Sign In</span>
         </button>
 
         <!-- Dedicated Administrator Button -->
-        <button class="sf-btn sf-btn-outline sf-btn-sm" id="btnHeaderAdmin" onclick="handleAdminBtnClick()" title="Administrator Panel" style="padding: 7px 14px; font-size: 0.82rem; gap: 6px;">
+        <button class="sf-btn sf-btn-outline sf-btn-sm sf-header-admin-btn" id="btnHeaderAdmin" onclick="handleAdminBtnClick()" title="Administrator Panel" style="padding: 7px 14px; font-size: 0.82rem; gap: 6px;">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          <span id="headerAdminLabel">Admin</span>
+          <span class="sf-header-btn-text" id="headerAdminLabel">Admin</span>
           <span class="sf-admin-badge" id="headerAdminBadge" style="display: none; background: #10B981; margin-left: 2px;">Active</span>
         </button>
 

@@ -524,6 +524,29 @@ const PlayerManager = {
 /* ==========================================================================
    5. UI GENERATION & CARD BUILDERS
    ========================================================================== */
+function handleCardImgError(img) {
+  img.onerror = null;
+  img.style.display = 'none';
+  if (img.nextElementSibling) {
+    img.nextElementSibling.style.display = 'block';
+  }
+}
+
+function getChannelCardLogoHtml(safeLogo, safeName, initial) {
+  if (safeLogo) {
+    return '<img src="' + safeLogo + '" alt="' + safeName + '" class="sf-card-logo" onerror="handleCardImgError(this)">' +
+           '<span style="display:none; font-size: 1.5rem; font-weight: 800; color: var(--primary);">' + escapeHtml(initial) + '</span>';
+  }
+  return '<span style="font-size: 1.5rem; font-weight: 800; color: var(--primary);">' + escapeHtml(initial) + '</span>';
+}
+
+function getAdminTableLogoHtml(safeLogo) {
+  if (safeLogo) {
+    return '<img src="' + safeLogo + '" style="max-width: 100%; max-height: 100%;" alt="" onerror="this.onerror=null;this.parentElement.innerHTML=\'&#128250;\';">';
+  }
+  return '&#128250;';
+}
+
 function createChannelCard(ch) {
   const isFav = FavoritesStore.has(ch.id);
   const safeId = escapeHtml(ch.id);
@@ -544,11 +567,7 @@ function createChannelCard(ch) {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="${isFav ? '#EF4444' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
         </button>
         <div class="sf-card-logo-wrap">
-          ${safeLogo 
-            ? `<img src="${safeLogo}" alt="${safeName}" class="sf-card-logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-               <span style="display:none; font-size: 1.5rem; font-weight: 800; color: var(--primary);">${escapeHtml(initial)}</span>`
-            : `<span style="font-size: 1.5rem; font-weight: 800; color: var(--primary);">${escapeHtml(initial)}</span>`
-          }
+          ${getChannelCardLogoHtml(safeLogo, safeName, initial)}
         </div>
       </div>
       <div class="sf-card-body">
@@ -1011,8 +1030,16 @@ function loadAdminDashboard() {
 
     // Populate Category filter in admin table
     const catFilter = document.getElementById('adminCategoryFilter');
-    catFilter.innerHTML = '<option value="">All Categories</option>' + 
-      data.categories.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+    if (catFilter) {
+      let catOpts = '<option value="">All Categories</option>';
+      if (Array.isArray(data.categories)) {
+        for (let i = 0; i < data.categories.length; i++) {
+          const cName = escapeHtml(data.categories[i].name || '');
+          catOpts += '<option value="' + cName + '">' + cName + '</option>';
+        }
+      }
+      catFilter.innerHTML = catOpts;
+    }
 
     renderAdminChannelsTable(data.channels);
     renderAdminActivityTable(data.activity);
@@ -1026,6 +1053,11 @@ function loadAdminDashboard() {
 
 function renderAdminChannelsTable(channels) {
   const tbody = document.getElementById('adminChannelsTableBody');
+  if (!tbody) return;
+  if (!channels || channels.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 24px; color: var(--text-muted);">No channels found.</td></tr>';
+    return;
+  }
   tbody.innerHTML = channels.map(ch => {
     const safeId = escapeHtml(ch.id);
     const safeName = escapeHtml(ch.name);
@@ -1037,7 +1069,7 @@ function renderAdminChannelsTable(channels) {
       <td>
         <div style="display: flex; align-items: center; gap: 10px;">
           <div style="width: 32px; height: 32px; border-radius: 6px; background: var(--bg-subtle); display: flex; align-items: center; justify-content: center; overflow: hidden;">
-            ${safeLogo ? `<img src="${safeLogo}" style="max-width: 100%; max-height: 100%;" onerror="this.parentElement.textContent='📺'">` : '📺'}
+            ${getAdminTableLogoHtml(safeLogo)}
           </div>
           <div>
             <div style="font-weight: 700;">${safeName}</div>
@@ -1087,10 +1119,22 @@ function filterAdminChannelsTable() {
 }
 
 function switchAdminTab(tabName) {
-  ['channels', 'settings', 'activity'].forEach(tab => {
-    document.getElementById(`adminTab-${tab}`).style.display = tab === tabName ? 'block' : 'none';
-    document.getElementById(`adminTabBtn-${tab}`).classList.toggle('active', tab === tabName);
-  });
+  var tabs = ['channels', 'settings', 'activity'];
+  for (var i = 0; i < tabs.length; i++) {
+    var t = tabs[i];
+    var tabEl = document.getElementById('adminTab-' + t);
+    var tabBtn = document.getElementById('adminTabBtn-' + t);
+    if (tabEl) {
+      tabEl.style.display = (t === tabName) ? 'block' : 'none';
+    }
+    if (tabBtn) {
+      if (t === tabName) {
+        tabBtn.classList.add('active');
+      } else {
+        tabBtn.classList.remove('active');
+      }
+    }
+  }
 }
 
 function renderAdminActivityTable(activities) {
@@ -1879,6 +1923,33 @@ function bootstrapApp() {
     Router.handleHashChange();
   });
 }
+
+// Explicit Global Window Exports for Inline HTML Handlers
+window.Router = Router;
+window.PlayerManager = PlayerManager;
+window.FavoritesStore = FavoritesStore;
+window.AuthStore = AuthStore;
+window.UserAuthStore = UserAuthStore;
+window.handleAdminBtnClick = handleAdminBtnClick;
+window.handleUserAuthBtnClick = handleUserAuthBtnClick;
+window.handleAdminLogout = handleAdminLogout;
+window.handleUserLogout = handleUserLogout;
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.showToast = showToast;
+window.switchAdminTab = switchAdminTab;
+window.filterAdminChannelsTable = filterAdminChannelsTable;
+window.openAddChannelModal = openAddChannelModal;
+window.openEditChannelModal = openEditChannelModal;
+window.openM3UModal = openM3UModal;
+window.triggerDatabaseBackup = triggerDatabaseBackup;
+window.toggleChannelActiveStatus = toggleChannelActiveStatus;
+window.toggleChannelFeaturedStatus = toggleChannelFeaturedStatus;
+window.confirmDeleteChannel = confirmDeleteChannel;
+window.toggleWatchFavorite = toggleWatchFavorite;
+window.togglePasswordVisibility = togglePasswordVisibility;
+window.handleCardImgError = handleCardImgError;
+window.bootstrapApp = bootstrapApp;
 
 // Global Event Listeners
 window.addEventListener('DOMContentLoaded', () => {
