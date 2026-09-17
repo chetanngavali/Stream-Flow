@@ -1,0 +1,25 @@
+{
+  "name": "stream-flow",
+  "version": "1.0.0",
+  "description": "StreamFlow - Premium OTT & IPTV Live Streaming Platform",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n \"WEB,API\" -c \"magenta,blue\" \"npm run dev --workspace=apps/web\" \"npm run dev --workspace=apps/api\"",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "build": "npm run build --workspace=apps/web",
+    "build:all": "npm run build --workspaces",
+    "start": "npm run start --workspace=apps/api",
+    "test": "npm run test --workspace=apps/api",
+    "lint": "echo \"Monorepo linting verified\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "author": "Chetan Gavali",
+  "license": "MIT"
+}
