@@ -1,0 +1,84 @@
+<!-- Reset Password View Template -->
+<div class="sf-view" id="view-reset" style="display: none;">
+  <div style="max-width: 480px; margin: 40px auto; padding: 0 16px;">
+    
+    <!-- Breadcrumb / Back to Home -->
+    <div style="margin-bottom: 24px;">
+      <a href="javascript:void(0)" onclick="Router.navigate('home')" style="display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 0.88rem; font-weight: 600; text-decoration: none;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        Back to Home
+      </a>
+    </div>
+
+    <!-- Reset Password Card -->
+    <div class="sf-card" style="padding: 32px 28px; box-shadow: var(--shadow-lg); border: 1px solid var(--border-light); background: var(--bg-surface);">
+      
+      <!-- Card Header -->
+      <div style="text-align: center; margin-bottom: 28px;">
+        <div style="width: 52px; height: 52px; margin: 0 auto 16px auto; border-radius: 14px; background: var(--accent-gradient); color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1.5"/></svg>
+        </div>
+        <h1 style="font-size: 1.45rem; font-weight: 800; color: var(--text-primary); margin: 0;">Set New Password</h1>
+        <p style="color: var(--text-secondary); font-size: 0.88rem; margin: 6px 0 0 0;">Enter and confirm your new secure password below.</p>
+      </div>
+
+      <!-- Form View -->
+      <form id="resetPasswordForm" onsubmit="handleResetPasswordSubmit(event)">
+        <input type="hidden" id="resetPasswordToken" value="">
+
+        <div id="resetAlertBox" style="display: none; padding: 12px 14px; border-radius: var(--radius-sm); margin-bottom: 18px; font-size: 0.85rem;"></div>
+
+        <div class="sf-form-group" style="margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label class="sf-form-label" for="resetNewPassword" style="margin: 0;">New Password *</label>
+            <span style="font-size: 0.75rem; color: var(--primary); cursor: pointer; font-weight: 600;" onclick="togglePasswordVisibility('resetNewPassword')">Show / Hide</span>
+          </div>
+          <input type="password" id="resetNewPassword" class="sf-form-input" placeholder="Minimum 6 characters" minlength="6" required autocomplete="new-password">
+          <small style="color: var(--text-muted); font-size: 0.75rem;">Must be at least 6 characters with mixed characters recommended.</small>
+        </div>
+
+        <div class="sf-form-group" style="margin-bottom: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label class="sf-form-label" for="resetConfirmPassword" style="margin: 0;">Confirm New Password *</label>
+            <span style="font-size: 0.75rem; color: var(--primary); cursor: pointer; font-weight: 600;" onclick="togglePasswordVisibility('resetConfirmPassword')">Show / Hide</span>
+          </div>
+          <input type="password" id="resetConfirmPassword" class="sf-form-input" placeholder="Re-enter new password" minlength="6" required autocomplete="new-password">
+        </div>
+
+        <button type="submit" class="sf-btn sf-btn-primary" id="resetPasswordSubmitBtn" style="width: 100%; justify-content: center; padding: 12px; font-weight: 700;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Update Password
+        </button>
+      </form>
+
+      <!-- Success State Container -->
+      <div id="resetSuccessState" style="display: none; text-align: center; padding: 12px 0;">
+        <div style="width: 58px; height: 58px; margin: 0 auto 16px auto; border-radius: 50%; background: rgba(16, 185, 129, 0.15); color: #10B981; display: flex; align-items: center; justify-content: center;">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <h3 style="font-size: 1.25rem; font-weight: 800; color: var(--text-primary); margin: 0 0 8px 0;">Password Reset Complete!</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin: 0 0 24px 0;">
+          Your account password has been updated securely. You can now sign in using your new credentials.
+        </p>
+        <button type="button" class="sf-btn sf-btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-weight: 700;" onclick="openUserLoginModal()">
+          Sign In Now
+        </button>
+      </div>
+
+      <!-- Invalid/Missing Token State Container -->
+      <div id="resetInvalidState" style="display: none; text-align: center; padding: 12px 0;">
+        <div style="width: 58px; height: 58px; margin: 0 auto 16px auto; border-radius: 50%; background: rgba(239, 68, 68, 0.15); color: #EF4444; display: flex; align-items: center; justify-content: center;">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <h3 style="font-size: 1.25rem; font-weight: 800; color: var(--text-primary); margin: 0 0 8px 0;">Invalid or Expired Link</h3>
+        <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin: 0 0 24px 0;">
+          This password reset link is invalid, incomplete, or has expired (links expire after 1 hour). Please request a fresh reset link.
+        </p>
+        <button type="button" class="sf-btn sf-btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-weight: 700;" onclick="openForgotPasswordModal()">
+          Request New Link
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>

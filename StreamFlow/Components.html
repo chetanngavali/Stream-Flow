@@ -1,0 +1,457 @@
+<!-- StreamFlow Reusable Modals & Overlay Components -->
+
+<!-- Toast Notification Container -->
+<div class="sf-toast-container" id="toastContainer"></div>
+
+<!-- General Confirmation Modal -->
+<div class="sf-modal-overlay" id="confirmModalOverlay">
+  <div class="sf-modal" style="max-width: 440px;">
+    <div class="sf-modal-header">
+      <h3 class="sf-modal-title" id="confirmModalTitle">Confirm Action</h3>
+      <span class="sf-modal-close" onclick="closeModal('confirmModalOverlay')">&times;</span>
+    </div>
+    <div class="sf-modal-body">
+      <p id="confirmModalMessage" style="color: var(--text-secondary); font-size: 0.95rem;"></p>
+    </div>
+    <div class="sf-modal-footer">
+      <button type="button" class="sf-btn sf-btn-secondary sf-btn-sm" onclick="closeModal('confirmModalOverlay')">Cancel</button>
+      <button type="button" class="sf-btn sf-btn-danger sf-btn-sm" id="confirmModalBtn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Legal & Compliance Modal -->
+<div class="sf-modal-overlay" id="legalModalOverlay">
+  <div class="sf-modal" style="max-width: 640px;">
+    <div class="sf-modal-header">
+      <h3 class="sf-modal-title" id="legalModalTitle">StreamFlow Notice</h3>
+      <span class="sf-modal-close" onclick="closeModal('legalModalOverlay')">&times;</span>
+    </div>
+    <div class="sf-modal-body" id="legalModalBody" style="line-height: 1.7; font-size: 0.93rem; color: var(--text-secondary);">
+      <!-- Content injected dynamically -->
+    </div>
+    <div class="sf-modal-footer">
+      <button type="button" class="sf-btn sf-btn-primary sf-btn-sm" onclick="closeModal('legalModalOverlay')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Administrator Login Modal with Email, Password & 2FA PIN -->
+<div class="sf-modal-overlay" id="adminLoginModalOverlay">
+  <div class="sf-modal" style="max-width: 480px;">
+    <div class="sf-modal-header">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 34px; height: 34px; border-radius: 8px; background: var(--accent-gradient); color: #fff; display: flex; align-items: center; justify-content: center;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <div>
+          <h3 class="sf-modal-title" style="font-size: 1.15rem;">Admin Authentication</h3>
+          <small style="color: var(--text-muted); font-size: 0.78rem;">Email, Password & 2-Factor Authentication</small>
+        </div>
+      </div>
+      <span class="sf-modal-close" onclick="closeModal('adminLoginModalOverlay')">&times;</span>
+    </div>
+    <form id="adminLoginForm" onsubmit="handleAdminLoginSubmit(event)">
+      <div class="sf-modal-body">
+        <div class="sf-form-group">
+          <label class="sf-form-label" for="loginEmail">Admin Email ID *</label>
+          <input type="email" id="loginEmail" class="sf-form-input" placeholder="admin@domain.com" required autocomplete="username">
+        </div>
+
+        <div class="sf-form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label class="sf-form-label" for="loginPassword">Password *</label>
+            <span style="font-size: 0.75rem; color: var(--primary); cursor: pointer;" onclick="togglePasswordVisibility('loginPassword')">Show / Hide</span>
+          </div>
+          <input type="password" id="loginPassword" class="sf-form-input" placeholder="••••••••" required autocomplete="current-password">
+        </div>
+
+        <div class="sf-form-group">
+          <label class="sf-form-label" for="loginPin">2FA Security PIN (6 Digits) *</label>
+          <input type="password" id="loginPin" class="sf-form-input" placeholder="123456" maxlength="8" required style="letter-spacing: 0.25em; font-weight: 700; text-align: center; font-size: 1.1rem;" autocomplete="one-time-code">
+          <small style="color: var(--text-muted); font-size: 0.78rem;">Enter your configured administrative 2FA verification PIN.</small>
+        </div>
+      </div>
+      <div class="sf-modal-footer">
+        <button type="button" class="sf-btn sf-btn-secondary sf-btn-sm" onclick="closeModal('adminLoginModalOverlay')">Cancel</button>
+        <button type="submit" class="sf-btn sf-btn-primary sf-btn-sm" id="adminLoginBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Authenticate & Unlock
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- End-User Login Modal -->
+<div class="sf-modal-overlay" id="userLoginModalOverlay">
+  <div class="sf-modal" style="max-width: 440px;">
+    <div class="sf-modal-header">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 36px; height: 36px; border-radius: 10px; background: var(--accent-gradient); color: #fff; display: flex; align-items: center; justify-content: center;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div>
+          <h3 class="sf-modal-title" style="font-size: 1.15rem;">User Sign In</h3>
+          <small style="color: var(--text-muted); font-size: 0.78rem;">Access your personalized streaming experience</small>
+        </div>
+      </div>
+      <span class="sf-modal-close" onclick="closeModal('userLoginModalOverlay')">&times;</span>
+    </div>
+    <form id="userLoginForm" onsubmit="handleUserLoginSubmit(event)">
+      <div class="sf-modal-body">
+        <div id="userLoginErrorMsg" style="display: none; padding: 10px 12px; border-radius: var(--radius-sm); background: rgba(239, 68, 68, 0.1); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.2); font-size: 0.82rem; margin-bottom: 16px;"></div>
+
+        <div class="sf-form-group" style="margin-bottom: 16px;">
+          <label class="sf-form-label" for="userLoginEmail">Email Address *</label>
+          <input type="email" id="userLoginEmail" class="sf-form-input" placeholder="you@example.com" required autocomplete="email">
+        </div>
+
+        <div class="sf-form-group" style="margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label class="sf-form-label" for="userLoginPassword">Password *</label>
+            <a href="javascript:void(0)" onclick="openForgotPasswordModal()" style="font-size: 0.78rem; color: var(--primary); text-decoration: none; font-weight: 600;">Forgot Password?</a>
+          </div>
+          <input type="password" id="userLoginPassword" class="sf-form-input" placeholder="••••••••" required autocomplete="current-password">
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
+          <span style="font-size: 0.75rem; color: var(--text-muted); cursor: pointer;" onclick="togglePasswordVisibility('userLoginPassword')">Show / Hide Password</span>
+        </div>
+      </div>
+      <div class="sf-modal-footer" style="flex-direction: column; gap: 12px;">
+        <button type="submit" class="sf-btn sf-btn-primary" id="userLoginSubmitBtn" style="width: 100%; justify-content: center; padding: 11px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Sign In
+        </button>
+        <div style="text-align: center; font-size: 0.84rem; color: var(--text-secondary);">
+          Don't have an account? <a href="javascript:void(0)" onclick="openUserRegisterModal()" style="color: var(--primary); font-weight: 700; text-decoration: none;">Create Account</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- End-User Registration / Sign Up Modal -->
+<div class="sf-modal-overlay" id="userRegisterModalOverlay">
+  <div class="sf-modal" style="max-width: 440px;">
+    <div class="sf-modal-header">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 36px; height: 36px; border-radius: 10px; background: var(--accent-gradient); color: #fff; display: flex; align-items: center; justify-content: center;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+        </div>
+        <div>
+          <h3 class="sf-modal-title" style="font-size: 1.15rem;">Create an Account</h3>
+          <small style="color: var(--text-muted); font-size: 0.78rem;">Join StreamFlow to save channels & sync favorites</small>
+        </div>
+      </div>
+      <span class="sf-modal-close" onclick="closeModal('userRegisterModalOverlay')">&times;</span>
+    </div>
+    <form id="userRegisterForm" onsubmit="handleUserRegisterSubmit(event)">
+      <div class="sf-modal-body">
+        <div id="userRegisterErrorMsg" style="display: none; padding: 10px 12px; border-radius: var(--radius-sm); background: rgba(239, 68, 68, 0.1); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.2); font-size: 0.82rem; margin-bottom: 16px;"></div>
+
+        <div class="sf-form-group" style="margin-bottom: 14px;">
+          <label class="sf-form-label" for="userRegisterName">Full Name *</label>
+          <input type="text" id="userRegisterName" class="sf-form-input" placeholder="e.g. Alex Johnson" required maxlength="100" autocomplete="name">
+        </div>
+
+        <div class="sf-form-group" style="margin-bottom: 14px;">
+          <label class="sf-form-label" for="userRegisterEmail">Email Address *</label>
+          <input type="email" id="userRegisterEmail" class="sf-form-input" placeholder="you@example.com" required autocomplete="email">
+        </div>
+
+        <div class="sf-form-group" style="margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label class="sf-form-label" for="userRegisterPassword">Password *</label>
+            <span style="font-size: 0.75rem; color: var(--primary); cursor: pointer;" onclick="togglePasswordVisibility('userRegisterPassword')">Show / Hide</span>
+          </div>
+          <input type="password" id="userRegisterPassword" class="sf-form-input" placeholder="At least 6 characters" minlength="6" required autocomplete="new-password">
+        </div>
+
+        <div class="sf-form-group" style="margin-bottom: 8px;">
+          <label class="sf-form-label" for="userRegisterConfirmPassword">Confirm Password *</label>
+          <input type="password" id="userRegisterConfirmPassword" class="sf-form-input" placeholder="Re-enter password" minlength="6" required autocomplete="new-password">
+        </div>
+      </div>
+      <div class="sf-modal-footer" style="flex-direction: column; gap: 12px;">
+        <button type="submit" class="sf-btn sf-btn-primary" id="userRegisterSubmitBtn" style="width: 100%; justify-content: center; padding: 11px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          Create Account
+        </button>
+        <div style="text-align: center; font-size: 0.84rem; color: var(--text-secondary);">
+          Already have an account? <a href="javascript:void(0)" onclick="openUserLoginModal()" style="color: var(--primary); font-weight: 700; text-decoration: none;">Sign In</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Forgot Password Modal -->
+<div class="sf-modal-overlay" id="forgotPasswordModalOverlay">
+  <div class="sf-modal" style="max-width: 440px;">
+    <div class="sf-modal-header">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 36px; height: 36px; border-radius: 10px; background: var(--accent-gradient); color: #fff; display: flex; align-items: center; justify-content: center;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div>
+          <h3 class="sf-modal-title" style="font-size: 1.15rem;">Reset Password</h3>
+          <small style="color: var(--text-muted); font-size: 0.78rem;">Receive a secure reset link to your email</small>
+        </div>
+      </div>
+      <span class="sf-modal-close" onclick="closeModal('forgotPasswordModalOverlay')">&times;</span>
+    </div>
+    <form id="forgotPasswordForm" onsubmit="handleForgotPasswordSubmit(event)">
+      <div class="sf-modal-body">
+        <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 16px;">
+          Enter your registered email address. We will email you a direct password reset link valid for 1 hour.
+        </p>
+
+        <div id="forgotPasswordStatusMsg" style="display: none; padding: 10px 12px; border-radius: var(--radius-sm); font-size: 0.84rem; margin-bottom: 16px;"></div>
+
+        <div class="sf-form-group" style="margin-bottom: 12px;">
+          <label class="sf-form-label" for="forgotPasswordEmail">Account Email *</label>
+          <input type="email" id="forgotPasswordEmail" class="sf-form-input" placeholder="you@example.com" required autocomplete="email">
+        </div>
+      </div>
+      <div class="sf-modal-footer" style="flex-direction: column; gap: 12px;">
+        <button type="submit" class="sf-btn sf-btn-primary" id="forgotPasswordSubmitBtn" style="width: 100%; justify-content: center; padding: 11px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Send Reset Link
+        </button>
+        <div style="text-align: center; font-size: 0.84rem; color: var(--text-secondary);">
+          Remembered password? <a href="javascript:void(0)" onclick="openUserLoginModal()" style="color: var(--primary); font-weight: 700; text-decoration: none;">Back to Sign In</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- User Profile / Account Modal -->
+<div class="sf-modal-overlay" id="userProfileModalOverlay">
+  <div class="sf-modal" style="max-width: 440px;">
+    <div class="sf-modal-header">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 38px; height: 38px; border-radius: 50%; background: var(--accent-gradient); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1rem;" id="userProfileAvatarLetter">
+          U
+        </div>
+        <div>
+          <h3 class="sf-modal-title" style="font-size: 1.15rem;" id="userProfileName">User Account</h3>
+          <small style="color: var(--text-muted); font-size: 0.78rem;" id="userProfileEmail">user@example.com</small>
+        </div>
+      </div>
+      <span class="sf-modal-close" onclick="closeModal('userProfileModalOverlay')">&times;</span>
+    </div>
+    <div class="sf-modal-body">
+      <div style="background: var(--bg-subtle); border-radius: var(--radius-sm); padding: 14px; border: 1px solid var(--border-light); margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span style="font-size: 0.82rem; color: var(--text-muted);">Account Type</span>
+          <span style="font-size: 0.82rem; font-weight: 700; color: #10B981; background: rgba(16, 185, 129, 0.1); padding: 2px 8px; border-radius: 99px;">Standard Member</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 0.82rem; color: var(--text-muted);">Cloud Sync</span>
+          <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);">Active</span>
+        </div>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+        You are currently signed in. Your favorite channels and viewing settings are stored for seamless live streaming.
+      </p>
+    </div>
+    <div class="sf-modal-footer" style="justify-content: space-between;">
+      <button type="button" class="sf-btn sf-btn-secondary sf-btn-sm" onclick="closeModal('userProfileModalOverlay')">Close</button>
+      <button type="button" class="sf-btn sf-btn-danger sf-btn-sm" onclick="handleUserLogout()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Sign Out
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Channel Add/Edit Modal -->
+<div class="sf-modal-overlay" id="channelModalOverlay">
+  <div class="sf-modal" style="max-width: 620px;">
+    <div class="sf-modal-header">
+      <h3 class="sf-modal-title" id="channelModalTitle">Add New Channel</h3>
+      <span class="sf-modal-close" onclick="closeModal('channelModalOverlay')">&times;</span>
+    </div>
+    <form id="channelForm" onsubmit="handleChannelFormSubmit(event)">
+      <div class="sf-modal-body">
+        <input type="hidden" id="channelFormId" value="">
+        
+        <div class="sf-form-group">
+          <label class="sf-form-label" for="formChannelName">Channel Name *</label>
+          <input type="text" id="formChannelName" class="sf-form-input" placeholder="e.g. Bloomberg TV Live" required maxlength="120">
+        </div>
+
+        <div class="sf-form-group">
+          <label class="sf-form-label" for="formStreamUrl">Stream URL (.m3u8 or mp4) *</label>
+          <input type="url" id="formStreamUrl" class="sf-form-input" placeholder="https://example.com/live/index.m3u8" required>
+          <small style="color: var(--text-muted); font-size: 0.78rem;">Only valid HTTP/HTTPS URLs permitted. Stream is played directly by browser.</small>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+          <div class="sf-form-group">
+            <label class="sf-form-label" for="formCountry">Country *</label>
+            <input type="text" id="formCountry" class="sf-form-input" placeholder="e.g. United States" required>
+          </div>
+          <div class="sf-form-group">
+            <label class="sf-form-label" for="formCountryCode">Country Code (2-letter)</label>
+            <input type="text" id="formCountryCode" class="sf-form-input" placeholder="e.g. US" maxlength="2" style="text-transform: uppercase;">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+          <div class="sf-form-group">
+            <label class="sf-form-label" for="formCategory">Category *</label>
+            <input type="text" id="formCategory" class="sf-form-input" placeholder="e.g. News" required>
+          </div>
+          <div class="sf-form-group">
+            <label class="sf-form-label" for="formLanguage">Language *</label>
+            <input type="text" id="formLanguage" class="sf-form-input" placeholder="e.g. English" required>
+          </div>
+        </div>
+
+        <div class="sf-form-group">
+          <label class="sf-form-label" for="formLogoUrl">Logo URL (Public or Drive Asset)</label>
+          <input type="url" id="formLogoUrl" class="sf-form-input" placeholder="https://... or upload below">
+        </div>
+
+        <div class="sf-form-group">
+          <label class="sf-form-label">Or Upload Logo directly to Google Drive:</label>
+          <input type="file" id="formLogoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" class="sf-form-input" style="padding: 6px;">
+        </div>
+
+        <div class="sf-form-group">
+          <label class="sf-form-label" for="formDescription">Description</label>
+          <textarea id="formDescription" class="sf-form-textarea" placeholder="Brief channel overview..."></textarea>
+        </div>
+
+        <div style="display: flex; gap: 20px; align-items: center; margin-top: 10px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 600;">
+            <input type="checkbox" id="formIsActive" checked>
+            Active (Publicly Visible)
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 600;">
+            <input type="checkbox" id="formIsFeatured">
+            Featured on Homepage
+          </label>
+        </div>
+      </div>
+      <div class="sf-modal-footer">
+        <button type="button" class="sf-btn sf-btn-secondary sf-btn-sm" onclick="closeModal('channelModalOverlay')">Cancel</button>
+        <button type="submit" class="sf-btn sf-btn-primary sf-btn-sm" id="channelSubmitBtn">Save Channel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Admin M3U Playlist Import Modal (URL / File / Text) -->
+<div class="sf-modal-overlay" id="m3uModalOverlay">
+  <div class="sf-modal" style="max-width: 760px;">
+    <div class="sf-modal-header">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <h3 class="sf-modal-title">Import Channels from M3U</h3>
+      </div>
+      <span class="sf-modal-close" onclick="closeModal('m3uModalOverlay')">&times;</span>
+    </div>
+    <div class="sf-modal-body">
+      <!-- Import Mode Tabs -->
+      <div style="display: flex; gap: 8px; margin-bottom: 18px; border-bottom: 1px solid var(--border-light); padding-bottom: 8px;">
+        <button type="button" class="sf-pill active" id="m3uTabBtn-url" onclick="switchM3uTab('url')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+          Direct URL Import
+        </button>
+        <button type="button" class="sf-pill" id="m3uTabBtn-file" onclick="switchM3uTab('file')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Upload M3U File
+        </button>
+        <button type="button" class="sf-pill" id="m3uTabBtn-text" onclick="switchM3uTab('text')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+          Paste Raw M3U
+        </button>
+      </div>
+
+      <!-- Mode 1: Direct URL Input -->
+      <div id="m3uPanel-url">
+        <div class="sf-form-group">
+          <label class="sf-form-label" for="m3uUrlInput">Direct M3U Playlist URL *</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="url" id="m3uUrlInput" class="sf-form-input" placeholder="https://example.com/streams.m3u">
+            <button type="button" class="sf-btn sf-btn-primary sf-btn-sm" id="m3uFetchUrlBtn" onclick="fetchM3UFromUrl()" style="white-space: nowrap;">
+              Fetch & Analyze
+            </button>
+          </div>
+          <small style="color: var(--text-muted); font-size: 0.78rem;">Example: <code>https://iptv-org.github.io/iptv/index.m3u</code> or any authorized remote playlist.</small>
+        </div>
+      </div>
+
+      <!-- Mode 2: File Upload -->
+      <div id="m3uPanel-file" style="display: none;">
+        <div class="sf-form-group">
+          <label class="sf-form-label">Select .m3u or .m3u8 file from your computer:</label>
+          <input type="file" id="m3uFileInput" accept=".m3u,.m3u8,text/plain" class="sf-form-input" style="padding: 6px;" onchange="handleM3UFileSelect(event)">
+        </div>
+      </div>
+
+      <!-- Mode 3: Raw Textarea -->
+      <div id="m3uPanel-text" style="display: none;">
+        <div class="sf-form-group">
+          <label class="sf-form-label">Paste M3U Content:</label>
+          <textarea id="m3uTextarea" class="sf-form-textarea" style="min-height: 120px; font-family: monospace; font-size: 0.8rem;" placeholder="#EXTM3U&#10;#EXTINF:-1 tvg-id=&quot;...&quot; tvg-name=&quot;Channel 1&quot; group-title=&quot;News&quot;,Channel 1&#10;https://stream.example.com/live.m3u8"></textarea>
+        </div>
+        <button type="button" class="sf-btn sf-btn-secondary sf-btn-sm" onclick="parseM3UContent()">
+          Analyze Text Content
+        </button>
+      </div>
+
+      <!-- Preview Summary -->
+      <div id="m3uPreviewArea" style="display: none; margin-top: 20px; border-top: 1px solid var(--border-light); padding-top: 16px;">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; text-align: center;">
+          <div style="background: var(--bg-subtle); padding: 10px; border-radius: var(--radius-sm);">
+            <div style="font-weight: 800; font-size: 1.2rem;" id="m3uTotalFound">0</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Detected</div>
+          </div>
+          <div style="background: var(--success-bg); color: var(--success); padding: 10px; border-radius: var(--radius-sm);">
+            <div style="font-weight: 800; font-size: 1.2rem;" id="m3uNewCount">0</div>
+            <div style="font-size: 0.75rem;">New Channels</div>
+          </div>
+          <div style="background: rgba(245, 158, 11, 0.1); color: var(--warning); padding: 10px; border-radius: var(--radius-sm);">
+            <div style="font-weight: 800; font-size: 1.2rem;" id="m3uDupCount">0</div>
+            <div style="font-size: 0.75rem;">Duplicates (Skipped)</div>
+          </div>
+          <div style="background: var(--danger-bg); color: var(--danger); padding: 10px; border-radius: var(--radius-sm);">
+            <div style="font-weight: 800; font-size: 1.2rem;" id="m3uInvalidCount">0</div>
+            <div style="font-size: 0.75rem;">Invalid URLs</div>
+          </div>
+        <div id="m3uActionBanner" style="margin-bottom: 14px;">
+          <button type="button" class="sf-btn sf-btn-primary" id="m3uMainActionBtn" onclick="commitM3UChannels()" style="width: 100%; justify-content: center; padding: 14px; font-weight: 800; font-size: 1rem; box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4); gap: 10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span id="m3uMainActionText">Import All New Channels</span>
+          </button>
+        </div>
+
+        <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border-light); border-radius: var(--radius-sm); margin-bottom: 14px;">
+          <table class="sf-table" style="font-size: 0.8rem;">
+            <thead>
+              <tr>
+                <th>Channel</th>
+                <th>Category</th>
+                <th>Country</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="m3uPreviewTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="sf-modal-footer" style="position: sticky; bottom: 0; background: var(--bg-surface); z-index: 10; border-top: 1px solid var(--border-light);">
+      <button type="button" class="sf-btn sf-btn-secondary sf-btn-sm" onclick="closeModal('m3uModalOverlay')">Cancel</button>
+      <button type="button" class="sf-btn sf-btn-primary sf-btn-sm" id="m3uCommitBtn" style="display: none;" onclick="commitM3UChannels()">Import Valid Channels</button>
+    </div>
+  </div>
+</div>

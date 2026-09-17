@@ -1,52 +1,106 @@
-# StreamFlow Architecture & Engineering Specification
+# StreamFlow — Technical Architecture & Engineering Specification
 
-## 1. High-Level Architecture
+## 1. Architectural Overview
 
-StreamFlow is built as a production monorepo containing:
-- **`apps/web`**: Frontend Single-Page Application (React 19, TypeScript, Tailwind CSS, Vite).
-- **`apps/api`**: Backend Node.js / Express API service with M3U ingestion, in-memory caching, and administrative controllers.
-- **`packages/shared`**: Shared TypeScript contracts, interfaces, and data models.
-- **`api/`**: Vercel Serverless Function entrypoints.
+StreamFlow is engineered as a cloud-native, serverless single-page web application running entirely on the **Google Workspace Platform** (Google Apps Script, Google Sheets, Google Drive, and Google MailApp).
 
-```
-┌────────────────────────────────────────────────────────┐
-│                   User Web Browser                     │
-│  - React 19 UI (Catalog, Navigation, Filters)          │
-│  - HLS.js Direct Engine (Plays streams directly)      │
-│  - LocalStorage (Favorites & History)                  │
-└──────────────────────────┬─────────────────────────────┘
-                           │
-            ┌──────────────┴──────────────┐
-            │                             │
-    Metadata Requests (JSON)       Direct Video Traffic (HLS)
-            │                             │
-            ▼                             ▼
-  ┌───────────────────┐        ┌─────────────────────────┐
-  │ StreamFlow API    │        │ Public Broadcaster CDN  │
-  │ (Express/Vercel)  │        │ (Akamai, Cloudflare...) │
-  └─────────┬─────────┘        └─────────────────────────┘
-            │
-            ▼
-  ┌───────────────────┐
-  │ In-Memory Cache   │
-  └─────────┬─────────┘
-            │
-            ▼
-  ┌───────────────────┐
-  │ iptv-org M3U Feeds│
-  └───────────────────┘
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                             Client Web Browser                              │
+│                                                                             │
+│  ┌───────────────────────┐  ┌───────────────────────┐  ┌─────────────────┐  │
+│  │ Single-Page App (SPA) │  │  State Store (Auth,   │  │ HLS.js HTML5    │  │
+│  │ Hash Router, Catalog  │  │  Favorites, History)  │  │ Media Engine    │  │
+│  └───────────┬───────────┘  └───────────────────────┘  └────────┬────────┘  │
+└──────────────┼──────────────────────────────────────────────────┼───────────┘
+               │                                                  │
+               │ RPC calls (google.script.run)                    │ Direct Video
+               ▼                                                  ▼
+┌──────────────────────────────────────────────┐        ┌─────────────────────┐
+│        Google Apps Script Web App            │        │ Broadcaster Network │
+│  (Runtime: V8 Engine | ExecuteAs: Deploying) │        │ (Akamai, Cloudflare)│
+│                                              │        └─────────────────────┘
+│  ┌────────────────────┐ ┌──────────────────┐ │
+│  │ Router (code.gs)   │ │ Security Engine  │ │
+│  │ doGet(e), Includes │ │ 2FA, HMAC Tokens │ │
+│  └─────────┬──────────┘ └─────────┬────────┘ │
+│            │                      │          │
+│  ┌─────────▼──────────────────────▼────────┐ │
+│  │ Business Services Layer                 │ │
+│  │ Channels, Categories, Countries, Admin  │ │
+│  └────────────────────┬────────────────────┘ │
+│                       │                      │
+│  ┌────────────────────▼────────────────────┐ │
+│  │ Hardened Data & Infrastructure Layer    │ │
+│  │ LockService, CacheService, SSRF Guard   │ │
+│  └─────────┬──────────────────────┬────────┘ │
+└────────────┼──────────────────────┼──────────┘
+             ▼                      ▼
+┌─────────────────────────┐  ┌─────────────────────────┐
+│ Google Sheets Database  │  │ Google Drive Storage    │
+│  - Channels (CRUD)      │  │  - Channel Logos        │
+│  - Categories           │  │  - Website Assets       │
+│  - Countries            │  │  - Database Backups     │
+│  - Languages            │  │  - M3U Ingest Files     │
+│  - Settings             │  └─────────────────────────┘
+│  - Users & Admins       │
+│  - Activity Logs        │
+└─────────────────────────┘
 ```
 
 ---
 
-## 2. Ingestion & Cache Engine
+## 2. Core Subsystems
 
-1. **Scheduled & Lazy Ingestion:**
-   - The playlist ingester checks `https://iptv-org.github.io/iptv/index.m3u`.
-   - Caches parsed channels in memory with sub-millisecond query execution.
-   - Saves backup to disk (`os.tmpdir()`) to prevent cold-start delays on serverless platforms.
-2. **Deterministic ID Generation:**
-   - Stream URLs and `tvg-id` are hashed to form deterministic SHA-256 IDs (`ch_xxxxxxxx`), ensuring bookmark stability across restarts.
-3. **Country & Category Resolution:**
-   - Country codes are parsed from `tvg-id` and resolved to 178 full localized nation names via `Intl.DisplayNames`.
-   - Channels are mapped to 35 standard genres.
+### 2.1 Web App Controller & Serving Engine (`code.gs`)
+* **Execution Identity:** Configured with `executeAs: "USER_DEPLOYING"` and `access: "ANYONE"`. This enables anonymous web visitors to query approved channels without needing explicit individual Google account permissions.
+* **Clickjacking Protection:** Enforces `setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT)` to prevent unauthorized framing.
+* **Modular Include Templating:** HTML components (`Styles.html`, `Scripts.html`, `Components.html`, `Header.html`, `Home.html`, etc.) are modularized and dynamically evaluated into `Index.html` via `HtmlService.createHtmlOutputFromFile().getContent()`.
+
+### 2.2 Relational Data Layer via Google Sheets (`database.gs`, `channels.gs`)
+Google Sheets acts as the high-speed structured persistence tier:
+* **Batch Operations:** All read and write operations use multi-row batch ranges (`getValues()`, `setValues()`) rather than individual cell calls to maximize throughput.
+* **Schema Freeze & Formatting:** Header rows are frozen and styled upon initialization.
+* **Object Mapping:** The DAL translates 2D array ranges into JSON objects mapped to canonical column definitions (`DATABASE_SCHEMAS`).
+* **High-Volume Chunker:** M3U imports with 10,000+ rows are partitioned into chunks of 2,500 rows to prevent execution timeouts.
+
+### 2.3 Two-Tier Identity & Authorization (`security.gs`)
+StreamFlow enforces strict cryptographic segregation between standard users and administrators:
+
+```text
+                                 [ Incoming Request ]
+                                          │
+                   ┌──────────────────────┴──────────────────────┐
+                   ▼                                             ▼
+        [ User Session Token ]                        [ Admin Session Token ]
+        - payload.role = 'user'                       - payload.role = 'admin'
+        - Signed with HMAC-SHA256                     - Signed with HMAC-SHA256
+        - 30-day validity                             - 24-hour validity
+        - Granted: Profile, Favorites                 - Must match isAuthorizedAdmin()
+                   │                                             │
+                   ▼                                             ▼
+      [ REJECTED on Admin APIs ]                    [ ACCEPTED on Admin APIs ]
+```
+
+* **Standard User Authentication:**
+  - Password hashing uses salted SHA-256 (`Utilities.computeDigest`).
+  - Session tokens carry `role: 'user'` and cannot authenticate for administrative operations.
+  - Password reset links use 64-character unguessable tokens with 1-hour expiry timestamps.
+* **Admin 2FA Authentication:**
+  - Requires Admin Email, Password, and a separate 4-to-8 digit 2FA Security PIN.
+  - Issues cryptographic HMAC-SHA256 signed session tokens carrying `role: 'admin'`.
+  - Every mutating endpoint calls `requireAdmin(token)` on the server.
+* **Google Account Native Identity:**
+  - Deploying owners and Google Workspace admins can authenticate directly via `Session.getActiveUser().getEmail()` if matching `ADMIN_EMAILS`.
+
+### 2.4 Hardened Security Layer (`utils.gs`)
+* **Function Visibility Encapsulation:** Internal methods append a trailing underscore `_` (`getScriptProperty_`, `setScriptProperty_`, `getSigningSecret_`, `hashPassword_`). Under Apps Script HTML Service, functions ending in `_` are completely invisible to client scripts and cannot be called via `google.script.run`.
+* **SSRF Defense:** `validateFetchUrl(url)` inspects protocol, hostname, and port prior to `UrlFetchApp.fetch()`. Blocks loopback (`127.0.0.0/8`, `localhost`), link-local and cloud metadata (`169.254.169.254`, `metadata.google.internal`), private subnets (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), and non-standard ports.
+* **Formula Injection Neutralization:** `sanitizeSheetCellValue(val)` prepends `'` to any string beginning with `=`, `+`, `-`, `@`, `\t`, or `\r`.
+* **Timing-Attack Resistance:** `secureCompare(a, b)` performs constant-time byte-by-byte XOR comparison for token signatures and passwords.
+* **Concurrency Locks:** Mutex locks via `LockService.getScriptLock()` prevent race conditions during bulk writes.
+
+### 2.5 Streaming Architecture
+* **Zero Video Proxying:** StreamFlow NEVER acts as a media proxy or relay.
+* **Client-Side HLS Engine:** The client browser uses `HLS.js` directly against the broadcaster's authorized streaming servers.
+* **Adaptive Bitrate:** Automatically selects optimal stream bitrate based on the client's current bandwidth.

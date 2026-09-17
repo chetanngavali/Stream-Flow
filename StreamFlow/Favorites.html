@@ -1,0 +1,51 @@
+<!-- Favorites View Template -->
+<div class="sf-view" id="view-favorites" style="display: none;">
+  <div class="sf-section-header">
+    <div>
+      <h1 class="sf-section-title">My Favorite Channels</h1>
+      <p class="sf-section-subtitle">Channels you have bookmarked for quick access</p>
+    </div>
+    <div id="favoritesCountBadge" style="font-size: 0.88rem; font-weight: 700; color: var(--primary); background: var(--primary-light); padding: 6px 14px; border-radius: var(--radius-full);">
+      0 Channels
+    </div>
+  </div>
+
+  <div class="sf-grid" id="favoritesChannelGrid">
+    <!-- Injected dynamically from LocalStorage -->
+  </div>
+
+  <div class="sf-empty-state" id="favoritesEmptyState" style="display: none;">
+    <div class="sf-empty-icon">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+    </div>
+    <h3 class="sf-empty-title">No Favorites Yet</h3>
+    <p class="sf-empty-desc">Click the heart icon on any channel card or player to save it to your personal favorites list.</p>
+    <button class="sf-btn sf-btn-primary sf-btn-sm" onclick="Router.navigate('browse')">Browse Channels</button>
+  </div>
+</div>
+
+<!-- History View Template -->
+<div class="sf-view" id="view-history" style="display: none;">
+  <div class="sf-section-header">
+    <div>
+      <h1 class="sf-section-title">Watch History</h1>
+      <p class="sf-section-subtitle">Recently streamed broadcasts from this browser</p>
+    </div>
+    <button class="sf-btn sf-btn-secondary sf-btn-sm" onclick="HistoryStore.clear(); renderHistoryView();">
+      Clear History
+    </button>
+  </div>
+
+  <div class="sf-grid" id="historyChannelGrid">
+    <!-- Injected dynamically from LocalStorage -->
+  </div>
+
+  <div class="sf-empty-state" id="historyEmptyState" style="display: none;">
+    <div class="sf-empty-icon">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </div>
+    <h3 class="sf-empty-title">No Watch History</h3>
+    <p class="sf-empty-desc">When you tune in to channels, they will automatically appear here for easy resumption.</p>
+    <button class="sf-btn sf-btn-primary sf-btn-sm" onclick="Router.navigate('browse')">Explore Channels</button>
+  </div>
+</div>

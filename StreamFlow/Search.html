@@ -1,0 +1,38 @@
+<!-- Search View Template -->
+<div class="sf-view" id="view-search" style="display: none;">
+  <div style="max-width: 720px; margin: 0 auto 36px;">
+    <h1 class="sf-section-title" style="text-align: center; margin-bottom: 8px;">Search Channels</h1>
+    <p class="sf-section-subtitle" style="text-align: center; margin-bottom: 24px;">Find broadcasts by channel name, country, category, or language</p>
+
+    <!-- Search Input Bar -->
+    <div style="position: relative; display: flex; align-items: center;">
+      <div style="position: absolute; left: 18px; color: var(--text-muted); pointer-events: none;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      </div>
+      <input type="text" id="mainSearchInput" class="sf-form-input" style="padding: 16px 48px 16px 52px; font-size: 1.05rem; border-radius: var(--radius-full); box-shadow: var(--shadow-sm);" placeholder="Search news, sports, entertainment, countries..." oninput="handleSearchInput(event)">
+      <button id="mainSearchClearBtn" type="button" style="position: absolute; right: 18px; color: var(--text-muted); display: none; cursor: pointer;" onclick="clearMainSearch()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="sf-section-header">
+    <div id="searchSummaryText" style="font-weight: 700; font-size: 1.1rem; color: var(--text-secondary);">
+      Start typing to search...
+    </div>
+    <div id="searchResultCount" style="font-size: 0.88rem; font-weight: 700; color: var(--primary);"></div>
+  </div>
+
+  <div class="sf-grid" id="searchResultsGrid">
+    <!-- Populated by search input -->
+  </div>
+
+  <div class="sf-empty-state" id="searchEmptyState" style="display: none;">
+    <div class="sf-empty-icon">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+    </div>
+    <h3 class="sf-empty-title">No Channels Found</h3>
+    <p class="sf-empty-desc">We couldn't find any channels matching your query. Please check your spelling or try different keywords.</p>
+    <button class="sf-btn sf-btn-secondary sf-btn-sm" onclick="clearMainSearch()">Clear Search</button>
+  </div>
+</div>

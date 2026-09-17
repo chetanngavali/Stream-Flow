@@ -1,0 +1,92 @@
+<!-- Home View Template -->
+<div class="sf-view" id="view-home">
+  <!-- Hero Section -->
+  <section class="sf-hero">
+    <div class="sf-hero-content">
+      <div class="sf-hero-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        <span>StreamFlow Live Platform</span>
+      </div>
+      <h1 class="sf-hero-title">Watch authorized <span>live channels</span> from around the world.</h1>
+      <p class="sf-hero-desc">
+        StreamFlow offers a clean, lightning-fast directory and player for verified live broadcast streams across news, sports, entertainment, and culture.
+      </p>
+      <div class="sf-hero-actions">
+        <button class="sf-btn sf-btn-primary" onclick="Router.navigate('browse')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          Explore Live TV
+        </button>
+        <button class="sf-btn sf-btn-secondary" onclick="Router.navigate('countries')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+          Browse Countries
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Recently Watched (Local Storage) -->
+  <section id="homeRecentlyWatchedSection" style="display: none; margin-bottom: 48px;">
+    <div class="sf-section-header">
+      <div>
+        <h2 class="sf-section-title">Jump Back In</h2>
+        <p class="sf-section-subtitle">Your recently played live streams</p>
+      </div>
+      <button class="sf-btn sf-btn-secondary sf-btn-sm" onclick="HistoryStore.clear(); renderRecentlyWatched();">
+        Clear History
+      </button>
+    </div>
+    <div class="sf-grid" id="homeRecentlyWatchedGrid"></div>
+  </section>
+
+  <!-- Featured Channels -->
+  <section style="margin-bottom: 48px;">
+    <div class="sf-section-header">
+      <div>
+        <h2 class="sf-section-title">Featured Live Streams</h2>
+        <p class="sf-section-subtitle">Curated broadcasts streaming right now</p>
+      </div>
+      <button class="sf-btn sf-btn-secondary sf-btn-sm" onclick="Router.navigate('browse')">
+        View All Channels &rarr;
+      </button>
+    </div>
+    <div class="sf-grid" id="homeFeaturedGrid">
+      <!-- Loading skeletons -->
+      <div class="sf-skeleton sf-skeleton-card"></div>
+      <div class="sf-skeleton sf-skeleton-card"></div>
+      <div class="sf-skeleton sf-skeleton-card"></div>
+      <div class="sf-skeleton sf-skeleton-card"></div>
+    </div>
+  </section>
+
+  <!-- Categories Section -->
+  <section style="margin-bottom: 48px;">
+    <div class="sf-section-header">
+      <div>
+        <h2 class="sf-section-title">Explore by Category</h2>
+        <p class="sf-section-subtitle">Find channels dedicated to topics you care about</p>
+      </div>
+      <button class="sf-btn sf-btn-secondary sf-btn-sm" onclick="Router.navigate('categories')">
+        All Categories &rarr;
+      </button>
+    </div>
+    <div class="sf-grid" id="homeCategoriesGrid" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));">
+      <!-- Injected from Database -->
+    </div>
+  </section>
+
+  <!-- Countries Section -->
+  <section>
+    <div class="sf-section-header">
+      <div>
+        <h2 class="sf-section-title">Broadcasts by Country</h2>
+        <p class="sf-section-subtitle">Connect with regional television from across the globe</p>
+      </div>
+      <button class="sf-btn sf-btn-secondary sf-btn-sm" onclick="Router.navigate('countries')">
+        All Countries &rarr;
+      </button>
+    </div>
+    <div class="sf-grid" id="homeCountriesGrid" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));">
+      <!-- Injected from Database -->
+    </div>
+  </section>
+</div>

@@ -1,0 +1,1899 @@
+<script>
+/**
+ * StreamFlow — Client-side Application Controller
+ * Handles Promises-based API client, client routing, HLS video player,
+ * state persistence (Favorites, History), and UI reactivity.
+ */
+
+// Global Application State Store
+const AppState = {
+  channels: [],
+  categories: [],
+  countries: [],
+  languages: [],
+  settings: {},
+  isAdmin: false,
+  adminData: null,
+  currentView: 'home',
+  currentChannel: null,
+  browseFilters: {
+    category: 'all',
+    country: '',
+    language: '',
+    sort: 'featured',
+    page: 1,
+    limit: 24
+  },
+  searchQuery: '',
+  m3uParsedItems: []
+};
+
+/* ==========================================================================
+   0. AUTHENTICATION & SESSION TOKEN STORE
+   ========================================================================== */
+const AuthStore = {
+  TOKEN_KEY: 'sf_admin_token',
+  EMAIL_KEY: 'sf_admin_email',
+  getToken: function() {
+    return localStorage.getItem(this.TOKEN_KEY) || sessionStorage.getItem(this.TOKEN_KEY) || '';
+  },
+  getEmail: function() {
+    return localStorage.getItem(this.EMAIL_KEY) || sessionStorage.getItem(this.EMAIL_KEY) || '';
+  },
+  setToken: function(token, email) {
+    localStorage.setItem(this.TOKEN_KEY, token);
+    localStorage.setItem(this.EMAIL_KEY, email);
+    AppState.isAdmin = true;
+    updateAdminNavUI(true, email);
+  },
+  clearToken: function() {
+    localStorage.removeItem(this.TOKEN_KEY);
+    localStorage.removeItem(this.EMAIL_KEY);
+    sessionStorage.removeItem(this.TOKEN_KEY);
+    sessionStorage.removeItem(this.EMAIL_KEY);
+    AppState.isAdmin = false;
+    updateAdminNavUI(false);
+  },
+  isLoggedIn: function() {
+    return Boolean(this.getToken());
+  }
+};
+
+const UserAuthStore = {
+  TOKEN_KEY: 'sf_user_token',
+  PROFILE_KEY: 'sf_user_profile',
+  getToken: function() {
+    return localStorage.getItem(this.TOKEN_KEY) || '';
+  },
+  getUser: function() {
+    try {
+      const raw = localStorage.getItem(this.PROFILE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  },
+  setUser: function(user, token) {
+    localStorage.setItem(this.TOKEN_KEY, token);
+    localStorage.setItem(this.PROFILE_KEY, JSON.stringify(user));
+    updateUserNavUI();
+  },
+  clear: function() {
+    localStorage.removeItem(this.TOKEN_KEY);
+    localStorage.removeItem(this.PROFILE_KEY);
+    updateUserNavUI();
+  },
+  isLoggedIn: function() {
+    return Boolean(this.getToken() && this.getUser());
+  }
+};
+
+function updateUserNavUI() {
+  const userBtnLabel = document.getElementById('headerUserAuthLabel');
+  const bottomUserLabel = document.getElementById('bottomNavUserLabel');
+  const isUserLogged = UserAuthStore.isLoggedIn();
+  const user = UserAuthStore.getUser();
+
+  if (userBtnLabel) {
+    if (isUserLogged && user) {
+      userBtnLabel.textContent = user.name ? user.name.split(' ')[0] : 'Account';
+    } else {
+      userBtnLabel.textContent = 'Sign In';
+    }
+  }
+
+  if (bottomUserLabel) {
+    bottomUserLabel.textContent = isUserLogged ? 'Account' : 'Sign In';
+  }
+
+  if (isUserLogged && user) {
+    const profileName = document.getElementById('userProfileName');
+    const profileEmail = document.getElementById('userProfileEmail');
+    const avatarLetter = document.getElementById('userProfileAvatarLetter');
+    if (profileName) profileName.textContent = user.name || 'Member';
+    if (profileEmail) profileEmail.textContent = user.email || '';
+    if (avatarLetter) avatarLetter.textContent = (user.name || user.email || 'U').charAt(0).toUpperCase();
+  }
+}
+
+function updateAdminNavUI(isLoggedIn, email = '') {
+  const badge = document.getElementById('headerAdminBadge');
+  const logoutBtn = document.getElementById('headerLogoutBtn');
+
+  if (badge) {
+    badge.style.display = isLoggedIn ? 'inline-block' : 'none';
+  }
+  if (logoutBtn) {
+    logoutBtn.style.display = isLoggedIn ? 'inline-flex' : 'none';
+  }
+  const emailBadge = document.getElementById('adminUserEmailBadge');
+  if (emailBadge && email) {
+    emailBadge.textContent = email;
+  }
+}
+
+/* ==========================================================================
+   1. PROMISE-BASED APPS SCRIPT API CLIENT
+   ========================================================================== */
+const API = {
+  call: function(fnName, ...args) {
+    return new Promise((resolve, reject) => {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(result => resolve(result))
+          .withFailureHandler(err => {
+            console.error(`Apps Script API Error [${fnName}]:`, err);
+            reject(err);
+          })[fnName](...args);
+      } else {
+        console.warn(`[Local Dev] google.script.run not found. Simulating call to ${fnName}`);
+        resolve(this._simulateLocal(fnName, ...args));
+      }
+    });
+  },
+
+  // Public Endpoints
+  getChannels: () => API.call('getChannels'),
+  getChannelById: (id) => API.call('getChannelById', id),
+  searchChannels: (q) => API.call('searchChannels', q),
+  getFeaturedChannels: () => API.call('getFeaturedChannels'),
+  getCountries: () => API.call('getCountries'),
+  getCategories: () => API.call('getCategories'),
+  getLanguages: () => API.call('getLanguages'),
+  getSettings: () => API.call('getSettings'),
+  isAdmin: () => API.call('isAdmin', AuthStore.getToken()),
+
+  // User Account & Password Reset Endpoints
+  registerUser: (name, email, pass) => API.call('registerUser', name, email, pass),
+  loginUser: (email, pass) => API.call('loginUser', email, pass),
+  sendPasswordResetEmail: (email) => API.call('sendPasswordResetEmail', email),
+  resetPasswordWithToken: (token, newPass) => API.call('resetPasswordWithToken', token, newPass),
+  getUserProfile: (token) => API.call('getUserProfile', token),
+
+  // Administrative Endpoints
+  loginAdmin: (email, pass, pin) => API.call('loginAdmin', email, pass, pin),
+  getAdminData: () => API.call('getAdminData', AuthStore.getToken()),
+  addChannel: (data) => API.call('addChannel', data, AuthStore.getToken()),
+  updateChannel: (id, data) => API.call('updateChannel', id, data, AuthStore.getToken()),
+  deleteChannel: (id) => API.call('deleteChannel', id, AuthStore.getToken()),
+  toggleChannelStatus: (id) => API.call('toggleChannelStatus', id, AuthStore.getToken()),
+  toggleFeatured: (id) => API.call('toggleFeatured', id, AuthStore.getToken()),
+  parseM3U: (content) => API.call('parseM3U', content, AuthStore.getToken()),
+  fetchAndParseM3UUrl: (url) => API.call('fetchAndParseM3UUrl', url, AuthStore.getToken()),
+  importM3UFromUrlDirectly: (url) => API.call('importM3UFromUrlDirectly', url, AuthStore.getToken()),
+  commitM3UImport: (items) => API.call('commitM3UImport', items, AuthStore.getToken()),
+  updateSettings: (settings) => API.call('updateSettings', settings, AuthStore.getToken()),
+  updateAdminCredentials: (cur, neu, pin) => API.call('updateAdminCredentials', cur, neu, pin, AuthStore.getToken()),
+  uploadChannelLogo: (name, b64, mime) => API.call('uploadChannelLogo', name, b64, mime, AuthStore.getToken()),
+  createDatabaseBackup: () => API.call('createDatabaseBackup', AuthStore.getToken()),
+  getAdmins: () => API.call('getAdmins', AuthStore.getToken()),
+  addAdmin: (data) => API.call('addAdmin', data, AuthStore.getToken()),
+  getActivityLog: (limit) => API.call('getActivityLog', limit || 50, AuthStore.getToken()),
+  addCategory: (data) => API.call('addCategory', data, AuthStore.getToken()),
+  updateCategory: (id, data) => API.call('updateCategory', id, data, AuthStore.getToken()),
+  deleteCategory: (id) => API.call('deleteCategory', id, AuthStore.getToken()),
+  addCountry: (data) => API.call('addCountry', data, AuthStore.getToken()),
+  updateCountry: (id, data) => API.call('updateCountry', id, data, AuthStore.getToken()),
+  deleteCountry: (id) => API.call('deleteCountry', id, AuthStore.getToken()),
+  addLanguage: (data) => API.call('addLanguage', data, AuthStore.getToken()),
+  updateLanguage: (id, data) => API.call('updateLanguage', id, data, AuthStore.getToken()),
+  deleteLanguage: (id) => API.call('deleteLanguage', id, AuthStore.getToken()),
+
+  _simulateLocal: function(fnName) {
+    if (fnName === 'getChannels') return [];
+    if (fnName === 'isAdmin') return false;
+    if (fnName === 'getCategories') return [];
+    if (fnName === 'getCountries') return [];
+    return null;
+  }
+};
+
+/* ==========================================================================
+   2. CLIENT-SIDE ROUTER & VIEW SWITCHER
+   ========================================================================== */
+const Router = {
+  navigate: function(view, params = {}) {
+    AppState.currentView = view;
+    
+    // Update active nav links
+    document.querySelectorAll('.sf-nav-link').forEach(el => {
+      el.classList.toggle('active', el.getAttribute('data-route') === view);
+    });
+    document.querySelectorAll('.sf-bottom-nav-item').forEach(el => {
+      el.classList.toggle('active', el.getAttribute('data-bottom') === view);
+    });
+
+    // Hide all view containers
+    document.querySelectorAll('.sf-view').forEach(v => {
+      v.style.display = 'none';
+    });
+
+    // Target view container
+    const target = document.getElementById(`view-${view}`);
+    if (target) {
+      target.style.display = 'block';
+    }
+
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // Handle view-specific logic
+    switch (view) {
+      case 'home':
+        renderHomeView();
+        break;
+      case 'browse':
+        if (params.category) AppState.browseFilters.category = params.category;
+        if (params.country) AppState.browseFilters.country = params.country;
+        if (params.language) AppState.browseFilters.language = params.language;
+        renderBrowseView();
+        break;
+      case 'countries':
+        renderCountriesView();
+        break;
+      case 'categories':
+        renderCategoriesView();
+        break;
+      case 'watch':
+        if (params.id) {
+          loadWatchChannel(params.id);
+        }
+        break;
+      case 'favorites':
+        renderFavoritesView();
+        break;
+      case 'history':
+        renderHistoryView();
+        break;
+      case 'search':
+        document.getElementById('mainSearchInput')?.focus();
+        break;
+      case 'admin':
+        loadAdminDashboard();
+        break;
+      case 'reset':
+        renderResetView(params.token);
+        break;
+    }
+
+    // Update browser URL hash cleanly without full page refresh
+    try {
+      const hashParams = new URLSearchParams(params);
+      const hashStr = hashParams.toString() ? `#view=${view}&${hashParams.toString()}` : `#view=${view}`;
+      window.history.pushState(null, '', hashStr);
+    } catch (e) {}
+  },
+
+  handleHashChange: function() {
+    let view = 'home';
+    const cleanParams = {};
+
+    // 1. Check server-injected initialParams from doGet (e.g. ?view=reset&token=...)
+    if (window.INITIAL_PARAMS && window.INITIAL_PARAMS.view && window.INITIAL_PARAMS.view !== 'home') {
+      view = window.INITIAL_PARAMS.view;
+      Object.keys(window.INITIAL_PARAMS).forEach(k => {
+        if (k !== 'view' && window.INITIAL_PARAMS[k]) {
+          cleanParams[k] = window.INITIAL_PARAMS[k];
+        }
+      });
+      // Clear view so subsequent back/forward navigation behaves normally
+      window.INITIAL_PARAMS.view = 'home';
+    }
+
+    // 2. Check query string in window.location.search
+    if (window.location.search) {
+      const searchParams = new URLSearchParams(window.location.search);
+      if (searchParams.get('view')) view = searchParams.get('view');
+      searchParams.forEach((val, key) => {
+        if (key !== 'view') cleanParams[key] = val;
+      });
+    }
+
+    // 3. Check hash in window.location.hash
+    const hash = window.location.hash.substring(1);
+    if (hash) {
+      const hashParams = new URLSearchParams(hash);
+      if (hashParams.get('view')) view = hashParams.get('view');
+      hashParams.forEach((val, key) => {
+        if (key !== 'view') cleanParams[key] = val;
+      });
+    }
+
+    Router.navigate(view, cleanParams);
+  }
+};
+
+/* ==========================================================================
+   3. LOCAL STORAGE PERSISTENCE (FAVORITES & HISTORY)
+   ========================================================================== */
+const FavoritesStore = {
+  KEY: 'streamflow_favorites',
+  get: function() {
+    try {
+      const raw = localStorage.getItem(this.KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  },
+  has: function(id) {
+    return this.get().includes(String(id));
+  },
+  toggle: function(id) {
+    const list = this.get();
+    const strId = String(id);
+    const index = list.indexOf(strId);
+    let added = false;
+
+    if (index > -1) {
+      list.splice(index, 1);
+    } else {
+      list.push(strId);
+      added = true;
+    }
+
+    try {
+      localStorage.setItem(this.KEY, JSON.stringify(list));
+    } catch (e) {}
+
+    showToast(added ? 'Added to favorites' : 'Removed from favorites', 'info');
+    updateFavoriteButtonsUI(strId, added);
+    return added;
+  }
+};
+
+const HistoryStore = {
+  KEY: 'streamflow_history',
+  MAX_ITEMS: 30,
+  get: function() {
+    try {
+      const raw = localStorage.getItem(this.KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  },
+  add: function(channel) {
+    if (!channel || !channel.id) return;
+    let list = this.get().filter(item => item.id !== channel.id);
+    list.unshift({
+      id: channel.id,
+      name: channel.name,
+      logo: channel.logo,
+      country: channel.country,
+      category: channel.category,
+      stream_url: channel.stream_url,
+      timestamp: Date.now()
+    });
+
+    if (list.length > this.MAX_ITEMS) {
+      list = list.slice(0, this.MAX_ITEMS);
+    }
+
+    try {
+      localStorage.setItem(this.KEY, JSON.stringify(list));
+    } catch (e) {}
+  },
+  clear: function() {
+    try {
+      localStorage.removeItem(this.KEY);
+      showToast('Watch history cleared', 'info');
+    } catch (e) {}
+  }
+};
+
+/* ==========================================================================
+   4. VIDEO PLAYER LIFECYCLE (HLS.JS + HTML5)
+   ========================================================================== */
+const PlayerManager = {
+  hls: null,
+  videoEl: null,
+  currentUrl: null,
+
+  init: function() {
+    this.videoEl = document.getElementById('sfVideoPlayer');
+    if (!this.videoEl) return;
+
+    this.videoEl.addEventListener('error', () => {
+      this.showError();
+    });
+
+    this.videoEl.addEventListener('playing', () => {
+      this.hideError();
+    });
+  },
+
+  play: function(streamUrl, streamType = 'hls') {
+    this.init();
+    this.currentUrl = streamUrl;
+    this.hideError();
+
+    if (!streamUrl) {
+      this.showError();
+      return;
+    }
+
+    // Destroy existing Hls instance if any
+    if (this.hls) {
+      this.hls.destroy();
+      this.hls = null;
+    }
+
+    const isHlsStream = streamUrl.toLowerCase().includes('.m3u8') || streamType === 'hls';
+
+    // 1. Check Hls.js support
+    if (isHlsStream && typeof Hls !== 'undefined' && Hls.isSupported()) {
+      this.hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 60
+      });
+
+      this.hls.loadSource(streamUrl);
+      this.hls.attachMedia(this.videoEl);
+
+      this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        this.videoEl.play().catch(e => {
+          console.log('Autoplay blocked or waiting for user gesture:', e);
+        });
+      });
+
+      this.hls.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.warn('Fatal network error encountered in stream, trying recovery...');
+              this.hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.warn('Fatal media error encountered, recovering...');
+              this.hls.recoverMediaError();
+              break;
+            default:
+              console.error('Unrecoverable stream playback error');
+              this.hls.destroy();
+              this.showError();
+              break;
+          }
+        }
+      });
+    }
+    // 2. Native HLS playback (Safari, iOS)
+    else if (this.videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+      this.videoEl.src = streamUrl;
+      this.videoEl.addEventListener('loadedmetadata', () => {
+        this.videoEl.play().catch(e => console.log('Autoplay deferred:', e));
+      }, { once: true });
+    }
+    // 3. Standard MP4 or video source
+    else {
+      this.videoEl.src = streamUrl;
+      this.videoEl.play().catch(e => console.log('Playback deferred:', e));
+    }
+  },
+
+  retry: function() {
+    if (this.currentUrl) {
+      this.play(this.currentUrl);
+    }
+  },
+
+  showError: function() {
+    const errOverlay = document.getElementById('playerErrorOverlay');
+    if (errOverlay) errOverlay.classList.add('is-active');
+  },
+
+  hideError: function() {
+    const errOverlay = document.getElementById('playerErrorOverlay');
+    if (errOverlay) errOverlay.classList.remove('is-active');
+  },
+
+  stop: function() {
+    if (this.videoEl) {
+      this.videoEl.pause();
+      this.videoEl.removeAttribute('src');
+      this.videoEl.load();
+    }
+    if (this.hls) {
+      this.hls.destroy();
+      this.hls = null;
+    }
+  }
+};
+
+/* ==========================================================================
+   5. UI GENERATION & CARD BUILDERS
+   ========================================================================== */
+function createChannelCard(ch) {
+  const isFav = FavoritesStore.has(ch.id);
+  const safeId = escapeHtml(ch.id);
+  const safeName = escapeHtml(ch.name);
+  const rawLogo = String(ch.logo || '').trim();
+  const safeLogo = (rawLogo.startsWith('http://') || rawLogo.startsWith('https://') || rawLogo.startsWith('/')) 
+    ? escapeHtml(rawLogo) 
+    : '';
+  const initial = ch.name ? ch.name.charAt(0).toUpperCase() : '?';
+
+  return `
+    <div class="sf-channel-card" data-channel-id="${safeId}">
+      <div class="sf-card-banner">
+        <span class="sf-live-badge">
+          <span class="sf-live-dot"></span> LIVE
+        </span>
+        <button class="sf-fav-btn ${isFav ? 'is-favorite' : ''}" onclick="event.stopPropagation(); FavoritesStore.toggle('${safeId}');" title="Toggle Favorite">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="${isFav ? '#EF4444' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+        </button>
+        <div class="sf-card-logo-wrap">
+          ${safeLogo 
+            ? `<img src="${safeLogo}" alt="${safeName}" class="sf-card-logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+               <span style="display:none; font-size: 1.5rem; font-weight: 800; color: var(--primary);">${escapeHtml(initial)}</span>`
+            : `<span style="font-size: 1.5rem; font-weight: 800; color: var(--primary);">${escapeHtml(initial)}</span>`
+          }
+        </div>
+      </div>
+      <div class="sf-card-body">
+        <h3 class="sf-channel-title" title="${safeName}">${safeName}</h3>
+        <div class="sf-tags">
+          <span class="sf-tag">${escapeHtml(ch.category || 'General')}</span>
+          <span class="sf-tag">${escapeHtml(ch.country || 'Global')}</span>
+          ${ch.language ? `<span class="sf-tag">${escapeHtml(ch.language)}</span>` : ''}
+        </div>
+        <div class="sf-card-footer">
+          <span style="font-size: 0.78rem; font-weight: 700; color: var(--success); display: inline-flex; align-items: center; gap: 4px;">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--success);"></span> Online
+          </span>
+          <button class="sf-btn sf-btn-primary sf-btn-sm" onclick="Router.navigate('watch', { id: '${safeId}' })">
+            Watch Live
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function updateFavoriteButtonsUI(channelId, isFav) {
+  document.querySelectorAll(`.sf-channel-card[data-channel-id="${channelId}"] .sf-fav-btn`).forEach(btn => {
+    btn.classList.toggle('is-favorite', isFav);
+    const svg = btn.querySelector('svg');
+    if (svg) svg.setAttribute('fill', isFav ? '#EF4444' : 'none');
+  });
+
+  // Watch page favorite button update
+  if (AppState.currentChannel && AppState.currentChannel.id === channelId) {
+    const watchFavBtn = document.getElementById('watchFavoriteBtn');
+    const watchFavText = document.getElementById('watchFavoriteText');
+    if (watchFavBtn && watchFavText) {
+      watchFavBtn.classList.toggle('is-favorite', isFav);
+      watchFavText.textContent = isFav ? 'Favorited' : 'Favorite';
+      const svg = watchFavBtn.querySelector('svg');
+      if (svg) svg.setAttribute('fill', isFav ? '#EF4444' : 'none');
+    }
+  }
+}
+
+/* ==========================================================================
+   6. VIEW RENDERING LOGIC
+   ========================================================================== */
+function renderHomeView() {
+  // 1. Featured Channels
+  const featuredGrid = document.getElementById('homeFeaturedGrid');
+  const featured = AppState.channels.filter(c => c.is_featured);
+
+  if (featured.length > 0) {
+    featuredGrid.innerHTML = featured.map(createChannelCard).join('');
+  } else if (AppState.channels.length > 0) {
+    // Show first 4 channels if no featured explicitly set
+    featuredGrid.innerHTML = AppState.channels.slice(0, 4).map(createChannelCard).join('');
+  } else {
+    featuredGrid.innerHTML = `
+      <div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-muted);">
+        No live channels configured yet. Administrator can add channels via the Admin Console.
+      </div>`;
+  }
+
+  // 2. Categories Highlights
+  const catGrid = document.getElementById('homeCategoriesGrid');
+  if (AppState.categories.length > 0) {
+    catGrid.innerHTML = AppState.categories.slice(0, 6).map(cat => `
+      <div class="sf-category-card" onclick="Router.navigate('browse', { category: decodeURIComponent('${encodeURIComponent(cat.name)}') })">
+        <div class="sf-cat-icon">📺</div>
+        <div>
+          <h4 style="font-size: 1rem; font-weight: 700;">${escapeHtml(cat.name)}</h4>
+          <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">${cat.channel_count || 0} channels</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // 3. Countries Highlights
+  const cntGrid = document.getElementById('homeCountriesGrid');
+  if (AppState.countries.length > 0) {
+    cntGrid.innerHTML = AppState.countries.slice(0, 6).map(c => `
+      <div class="sf-country-card" onclick="Router.navigate('browse', { country: decodeURIComponent('${encodeURIComponent(c.name)}') })">
+        <div class="sf-country-flag">${escapeHtml(c.flag || '🌐')}</div>
+        <div>
+          <h4 style="font-size: 1rem; font-weight: 700;">${escapeHtml(c.name)}</h4>
+          <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">${c.channel_count || 0} channels</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // 4. Recently Watched
+  renderRecentlyWatched();
+}
+
+function renderRecentlyWatched() {
+  const recSection = document.getElementById('homeRecentlyWatchedSection');
+  const recGrid = document.getElementById('homeRecentlyWatchedGrid');
+  const historyItems = HistoryStore.get();
+
+  if (historyItems.length > 0) {
+    recSection.style.display = 'block';
+    // Map items to channel card structure
+    recGrid.innerHTML = historyItems.slice(0, 4).map(createChannelCard).join('');
+  } else {
+    recSection.style.display = 'none';
+  }
+}
+
+function renderBrowseView() {
+  // Populate category pills
+  const pillsWrap = document.getElementById('browseCategoryPills');
+  let pillsHtml = `<div class="sf-pill ${AppState.browseFilters.category === 'all' ? 'active' : ''}" onclick="setBrowseCategory('all')">All Categories</div>`;
+  AppState.categories.forEach(cat => {
+    const isActive = AppState.browseFilters.category.toLowerCase() === cat.name.toLowerCase();
+    pillsHtml += `<div class="sf-pill ${isActive ? 'active' : ''}" onclick="setBrowseCategory('${cat.name}')">${escapeHtml(cat.name)}</div>`;
+  });
+  pillsWrap.innerHTML = pillsHtml;
+
+  // Populate Country & Language dropdowns
+  const countrySelect = document.getElementById('browseCountrySelect');
+  if (countrySelect.options.length <= 1) {
+    AppState.countries.forEach(cnt => {
+      const opt = document.createElement('option');
+      opt.value = cnt.name;
+      opt.textContent = `${cnt.flag || ''} ${cnt.name}`;
+      countrySelect.appendChild(opt);
+    });
+  }
+  if (AppState.browseFilters.country) {
+    countrySelect.value = AppState.browseFilters.country;
+  }
+
+  const langSelect = document.getElementById('browseLanguageSelect');
+  if (langSelect.options.length <= 1) {
+    AppState.languages.forEach(lng => {
+      const opt = document.createElement('option');
+      opt.value = lng.name;
+      opt.textContent = lng.name;
+      langSelect.appendChild(opt);
+    });
+  }
+  if (AppState.browseFilters.language) {
+    langSelect.value = AppState.browseFilters.language;
+  }
+
+  applyBrowseFilters();
+}
+
+function setBrowseCategory(catName) {
+  AppState.browseFilters.category = catName;
+  document.querySelectorAll('#browseCategoryPills .sf-pill').forEach(pill => {
+    pill.classList.toggle('active', pill.textContent.trim().toLowerCase() === (catName === 'all' ? 'all categories' : catName.toLowerCase()));
+  });
+  applyBrowseFilters();
+}
+
+function applyBrowseFilters() {
+  const countryVal = document.getElementById('browseCountrySelect').value;
+  const langVal = document.getElementById('browseLanguageSelect').value;
+  const sortVal = document.getElementById('browseSortSelect').value;
+  const catVal = AppState.browseFilters.category;
+
+  let filtered = [...AppState.channels];
+
+  // Category filter
+  if (catVal && catVal !== 'all') {
+    filtered = filtered.filter(ch => (ch.category || '').toLowerCase() === catVal.toLowerCase());
+  }
+
+  // Country filter
+  if (countryVal) {
+    filtered = filtered.filter(ch => (ch.country || '').toLowerCase() === countryVal.toLowerCase());
+  }
+
+  // Language filter
+  if (langVal) {
+    filtered = filtered.filter(ch => (ch.language || '').toLowerCase() === langVal.toLowerCase());
+  }
+
+  // Sorting
+  if (sortVal === 'az') {
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sortVal === 'za') {
+    filtered.sort((a, b) => b.name.localeCompare(a.name));
+  } else if (sortVal === 'country') {
+    filtered.sort((a, b) => a.country.localeCompare(b.country) || a.name.localeCompare(b.name));
+  } else {
+    // Featured first
+    filtered.sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0) || a.sort_order - b.sort_order);
+  }
+
+  // Update counts
+  const countBadge = document.getElementById('browseChannelCount');
+  countBadge.textContent = `${filtered.length} Channels`;
+
+  // Render Grid
+  const grid = document.getElementById('browseChannelGrid');
+  const empty = document.getElementById('browseEmptyState');
+
+  if (filtered.length === 0) {
+    grid.style.display = 'none';
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    grid.style.display = 'grid';
+    grid.innerHTML = filtered.map(createChannelCard).join('');
+  }
+}
+
+function resetBrowseFilters() {
+  AppState.browseFilters.category = 'all';
+  AppState.browseFilters.country = '';
+  AppState.browseFilters.language = '';
+  document.getElementById('browseCountrySelect').value = '';
+  document.getElementById('browseLanguageSelect').value = '';
+  document.getElementById('browseSortSelect').value = 'featured';
+  renderBrowseView();
+}
+
+function renderCountriesView() {
+  const grid = document.getElementById('countriesAllGrid');
+  grid.innerHTML = AppState.countries.map(c => `
+    <div class="sf-country-card" onclick="Router.navigate('browse', { country: decodeURIComponent('${encodeURIComponent(c.name)}') })">
+      <div class="sf-country-flag">${escapeHtml(c.flag || '🌐')}</div>
+      <div>
+        <h3 style="font-size: 1.1rem; font-weight: 700;">${escapeHtml(c.name)}</h3>
+        <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">${c.channel_count || 0} channels</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderCategoriesView() {
+  const grid = document.getElementById('categoriesAllGrid');
+  grid.innerHTML = AppState.categories.map(cat => `
+    <div class="sf-category-card" onclick="Router.navigate('browse', { category: decodeURIComponent('${encodeURIComponent(cat.name)}') })">
+      <div class="sf-cat-icon">📺</div>
+      <div>
+        <h3 style="font-size: 1.1rem; font-weight: 700;">${escapeHtml(cat.name)}</h3>
+        <p style="font-size: 0.82rem; color: var(--text-muted); margin: 2px 0 4px;">${escapeHtml(cat.description || '')}</p>
+        <span style="font-size: 0.85rem; color: var(--primary); font-weight: 700;">${cat.channel_count || 0} channels</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function loadWatchChannel(id) {
+  let channel = AppState.channels.find(c => c.id === id);
+
+  if (!channel) {
+    // Attempt fetch from backend
+    API.getChannelById(id).then(ch => {
+      if (ch) {
+        setupWatchPlayer(ch);
+      } else {
+        showToast('Channel not found or inactive', 'error');
+        Router.navigate('browse');
+      }
+    }).catch(() => {
+      showToast('Error loading channel stream', 'error');
+      Router.navigate('browse');
+    });
+  } else {
+    setupWatchPlayer(channel);
+  }
+}
+
+function setupWatchPlayer(channel) {
+  AppState.currentChannel = channel;
+
+  // Set Title & Meta
+  document.getElementById('watchChannelName').textContent = channel.name;
+  document.getElementById('watchTagCountry').textContent = channel.country || 'Global';
+  document.getElementById('watchTagCategory').textContent = channel.category || 'General';
+  document.getElementById('watchTagLanguage').textContent = channel.language || 'English';
+  document.getElementById('watchChannelDesc').textContent = channel.description || 'No channel description provided.';
+
+  // Logo
+  const logoEl = document.getElementById('watchChannelLogo');
+  const rawLogo = String(channel.logo || '').trim();
+  if (rawLogo.startsWith('http://') || rawLogo.startsWith('https://') || rawLogo.startsWith('/')) {
+    logoEl.src = rawLogo;
+    logoEl.style.display = 'block';
+  } else {
+    logoEl.removeAttribute('src');
+    logoEl.style.display = 'none';
+  }
+
+  // Favorite status
+  const isFav = FavoritesStore.has(channel.id);
+  const watchFavBtn = document.getElementById('watchFavoriteBtn');
+  const watchFavText = document.getElementById('watchFavoriteText');
+  watchFavBtn.classList.toggle('is-favorite', isFav);
+  watchFavText.textContent = isFav ? 'Favorited' : 'Favorite';
+  const svg = watchFavBtn.querySelector('svg');
+  if (svg) svg.setAttribute('fill', isFav ? '#EF4444' : 'none');
+
+  // Related Channels
+  const relatedList = document.getElementById('watchRelatedList');
+  const related = AppState.channels
+    .filter(c => c.id !== channel.id && (c.category === channel.category || c.country === channel.country))
+    .slice(0, 5);
+
+  if (related.length > 0) {
+    relatedList.innerHTML = related.map(c => {
+      const safeId = escapeHtml(c.id);
+      const safeName = escapeHtml(c.name);
+      return `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg-subtle); border-radius: var(--radius-sm); cursor: pointer;" onclick="Router.navigate('watch', { id: '${safeId}' })">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-weight: 700; font-size: 0.9rem;">${safeName}</span>
+        </div>
+        <span class="sf-tag">${escapeHtml(c.category)}</span>
+      </div>
+    `;
+    }).join('');
+  } else {
+    relatedList.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem;">No related channels found.</div>';
+  }
+
+  // Record into Local Watch History
+  HistoryStore.add(channel);
+
+  // Stream Playback
+  PlayerManager.play(channel.stream_url, channel.stream_type);
+}
+
+function toggleWatchFavorite() {
+  if (AppState.currentChannel) {
+    FavoritesStore.toggle(AppState.currentChannel.id);
+  }
+}
+
+function renderFavoritesView() {
+  const favIds = FavoritesStore.get();
+  const favChannels = AppState.channels.filter(c => favIds.includes(c.id));
+  const grid = document.getElementById('favoritesChannelGrid');
+  const empty = document.getElementById('favoritesEmptyState');
+  const badge = document.getElementById('favoritesCountBadge');
+
+  badge.textContent = `${favChannels.length} Channels`;
+
+  if (favChannels.length === 0) {
+    grid.style.display = 'none';
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    grid.style.display = 'grid';
+    grid.innerHTML = favChannels.map(createChannelCard).join('');
+  }
+}
+
+function renderHistoryView() {
+  const history = HistoryStore.get();
+  const grid = document.getElementById('historyChannelGrid');
+  const empty = document.getElementById('historyEmptyState');
+
+  if (history.length === 0) {
+    grid.style.display = 'none';
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    grid.style.display = 'grid';
+    grid.innerHTML = history.map(createChannelCard).join('');
+  }
+}
+
+/* ==========================================================================
+   7. LIVE SEARCH WITH DEBOUNCING
+   ========================================================================== */
+let searchDebounceTimer = null;
+
+function handleSearchInput(e) {
+  const q = e.target.value.trim();
+  const clearBtn = document.getElementById('mainSearchClearBtn');
+  clearBtn.style.display = q ? 'block' : 'none';
+
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    executeSearch(q);
+  }, 250);
+}
+
+function clearMainSearch() {
+  const input = document.getElementById('mainSearchInput');
+  input.value = '';
+  document.getElementById('mainSearchClearBtn').style.display = 'none';
+  executeSearch('');
+}
+
+function executeSearch(query) {
+  const summary = document.getElementById('searchSummaryText');
+  const count = document.getElementById('searchResultCount');
+  const grid = document.getElementById('searchResultsGrid');
+  const empty = document.getElementById('searchEmptyState');
+
+  if (!query) {
+    summary.textContent = 'Start typing to search...';
+    count.textContent = '';
+    grid.innerHTML = '';
+    empty.style.display = 'none';
+    return;
+  }
+
+  const q = query.toLowerCase();
+  const matches = AppState.channels.filter(ch => 
+    ch.name.toLowerCase().includes(q) ||
+    ch.country.toLowerCase().includes(q) ||
+    ch.category.toLowerCase().includes(q) ||
+    ch.language.toLowerCase().includes(q) ||
+    (ch.description && ch.description.toLowerCase().includes(q))
+  );
+
+  summary.textContent = `Results for "${query}"`;
+  count.textContent = `${matches.length} found`;
+
+  if (matches.length === 0) {
+    grid.style.display = 'none';
+    empty.style.display = 'block';
+  } else {
+    empty.style.display = 'none';
+    grid.style.display = 'grid';
+    grid.innerHTML = matches.map(createChannelCard).join('');
+  }
+}
+
+/* ==========================================================================
+   8. ADMIN CONSOLE MANAGEMENT
+   ========================================================================== */
+function loadAdminDashboard() {
+  if (!AuthStore.isLoggedIn() && !AppState.isAdmin) {
+    openModal('adminLoginModalOverlay');
+    return;
+  }
+
+  API.getAdminData().then(data => {
+    AppState.adminData = data;
+    AppState.isAdmin = true;
+
+    // Reveal admin navigation items
+    updateAdminNavUI(true, data.userEmail || AuthStore.getEmail());
+
+    // Populate Metrics
+    document.getElementById('statTotalChannels').textContent = data.stats.total_channels;
+    document.getElementById('statActiveChannels').textContent = data.stats.active_channels;
+    document.getElementById('statFeaturedChannels').textContent = data.stats.featured_channels;
+    document.getElementById('statTotalCountries').textContent = data.stats.total_countries;
+    document.getElementById('statTotalCategories').textContent = data.stats.total_categories;
+
+    // Populate Settings Form
+    if (data.settings) {
+      document.getElementById('settingSiteName').value = data.settings.site_name || '';
+      document.getElementById('settingSiteDesc').value = data.settings.site_description || '';
+      document.getElementById('settingLogoUrl').value = data.settings.logo_url || '';
+      document.getElementById('settingDefaultCategory').value = data.settings.default_category || '';
+      document.getElementById('settingDefaultCountry').value = data.settings.default_country || '';
+      document.getElementById('settingItemsPerPage').value = data.settings.items_per_page || '24';
+      document.getElementById('settingMaintenanceMode').checked = data.settings.maintenance_mode === 'true';
+    }
+
+    // Populate Category filter in admin table
+    const catFilter = document.getElementById('adminCategoryFilter');
+    catFilter.innerHTML = '<option value="">All Categories</option>' + 
+      data.categories.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+
+    renderAdminChannelsTable(data.channels);
+    renderAdminActivityTable(data.activity);
+  }).catch(err => {
+    showToast('Admin session expired or unauthorized. Please sign in.', 'error');
+    AuthStore.clearToken();
+    openModal('adminLoginModalOverlay');
+    Router.navigate('home');
+  });
+}
+
+function renderAdminChannelsTable(channels) {
+  const tbody = document.getElementById('adminChannelsTableBody');
+  tbody.innerHTML = channels.map(ch => {
+    const safeId = escapeHtml(ch.id);
+    const safeName = escapeHtml(ch.name);
+    const rawLogo = String(ch.logo || '').trim();
+    const safeLogo = (rawLogo.startsWith('http://') || rawLogo.startsWith('https://')) ? escapeHtml(rawLogo) : '';
+
+    return `
+    <tr>
+      <td>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 32px; height: 32px; border-radius: 6px; background: var(--bg-subtle); display: flex; align-items: center; justify-content: center; overflow: hidden;">
+            ${safeLogo ? `<img src="${safeLogo}" style="max-width: 100%; max-height: 100%;" onerror="this.parentElement.textContent='📺'">` : '📺'}
+          </div>
+          <div>
+            <div style="font-weight: 700;">${safeName}</div>
+            <small style="color: var(--text-muted);">${safeId}</small>
+          </div>
+        </div>
+      </td>
+      <td><span class="sf-tag">${escapeHtml(ch.category)}</span></td>
+      <td>${escapeHtml(ch.country)}</td>
+      <td>${escapeHtml(ch.language)}</td>
+      <td>
+        <button class="sf-btn ${ch.is_active ? 'sf-btn-primary' : 'sf-btn-secondary'} sf-btn-sm" style="padding: 3px 10px; font-size: 0.75rem;" onclick="toggleChannelActiveStatus('${safeId}')">
+          ${ch.is_active ? 'Active' : 'Disabled'}
+        </button>
+      </td>
+      <td>
+        <button class="sf-btn ${ch.is_featured ? 'sf-btn-primary' : 'sf-btn-secondary'} sf-btn-sm" style="padding: 3px 10px; font-size: 0.75rem;" onclick="toggleChannelFeaturedStatus('${safeId}')">
+          ${ch.is_featured ? '★ Featured' : '☆ Standard'}
+        </button>
+      </td>
+      <td style="text-align: right;">
+        <button class="sf-btn sf-btn-secondary sf-btn-sm" onclick="openEditChannelModal('${safeId}')">Edit</button>
+        <button class="sf-btn sf-btn-danger sf-btn-sm" onclick="confirmDeleteChannel('${safeId}')">Delete</button>
+      </td>
+    </tr>
+  `;
+  }).join('');
+}
+
+function filterAdminChannelsTable() {
+  if (!AppState.adminData) return;
+  const q = document.getElementById('adminChannelSearch').value.toLowerCase();
+  const cat = document.getElementById('adminCategoryFilter').value.toLowerCase();
+  const status = document.getElementById('adminStatusFilter').value;
+
+  const filtered = AppState.adminData.channels.filter(ch => {
+    const matchQ = !q || ch.name.toLowerCase().includes(q) || ch.country.toLowerCase().includes(q) || ch.stream_url.toLowerCase().includes(q);
+    const matchCat = !cat || ch.category.toLowerCase() === cat;
+    let matchStatus = true;
+    if (status === 'active') matchStatus = ch.is_active;
+    if (status === 'inactive') matchStatus = !ch.is_active;
+    if (status === 'featured') matchStatus = ch.is_featured;
+    return matchQ && matchCat && matchStatus;
+  });
+
+  renderAdminChannelsTable(filtered);
+}
+
+function switchAdminTab(tabName) {
+  ['channels', 'settings', 'activity'].forEach(tab => {
+    document.getElementById(`adminTab-${tab}`).style.display = tab === tabName ? 'block' : 'none';
+    document.getElementById(`adminTabBtn-${tab}`).classList.toggle('active', tab === tabName);
+  });
+}
+
+function renderAdminActivityTable(activities) {
+  const tbody = document.getElementById('adminActivityTableBody');
+  if (!activities || activities.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-muted);">No activity recorded yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = activities.map(act => `
+    <tr>
+      <td style="color: var(--text-muted);">${new Date(act.timestamp).toLocaleString()}</td>
+      <td><strong>${escapeHtml(act.action)}</strong></td>
+      <td>${escapeHtml(act.user)}</td>
+      <td><code>${escapeHtml(act.channel_id || '-')}</code></td>
+      <td>${escapeHtml(act.details || '-')}</td>
+    </tr>
+  `).join('');
+}
+
+function openAddChannelModal() {
+  document.getElementById('channelForm').reset();
+  document.getElementById('channelFormId').value = '';
+  document.getElementById('channelModalTitle').textContent = 'Add New Channel';
+  openModal('channelModalOverlay');
+}
+
+function openEditChannelModal(channelOrId) {
+  let ch = channelOrId;
+  if (typeof channelOrId === 'string') {
+    ch = (AppState.adminData && AppState.adminData.channels) 
+      ? AppState.adminData.channels.find(c => c.id === channelOrId) 
+      : null;
+  }
+  if (!ch) return;
+
+  document.getElementById('channelFormId').value = ch.id;
+  document.getElementById('formChannelName').value = ch.name;
+  document.getElementById('formStreamUrl').value = ch.stream_url;
+  document.getElementById('formCountry').value = ch.country;
+  document.getElementById('formCountryCode').value = ch.country_code || '';
+  document.getElementById('formCategory').value = ch.category;
+  document.getElementById('formLanguage').value = ch.language;
+  document.getElementById('formLogoUrl').value = ch.logo || '';
+  document.getElementById('formDescription').value = ch.description || '';
+  document.getElementById('formIsActive').checked = ch.is_active;
+  document.getElementById('formIsFeatured').checked = ch.is_featured;
+  document.getElementById('channelModalTitle').textContent = 'Edit Channel';
+  openModal('channelModalOverlay');
+}
+
+function handleChannelFormSubmit(e) {
+  e.preventDefault();
+  const id = document.getElementById('channelFormId').value;
+  const logoFileInput = document.getElementById('formLogoFile');
+
+  const payload = {
+    name: document.getElementById('formChannelName').value,
+    stream_url: document.getElementById('formStreamUrl').value,
+    country: document.getElementById('formCountry').value,
+    country_code: document.getElementById('formCountryCode').value,
+    category: document.getElementById('formCategory').value,
+    language: document.getElementById('formLanguage').value,
+    logo: document.getElementById('formLogoUrl').value,
+    description: document.getElementById('formDescription').value,
+    is_active: document.getElementById('formIsActive').checked,
+    is_featured: document.getElementById('formIsFeatured').checked,
+    stream_type: 'hls'
+  };
+
+  const submitBtn = document.getElementById('channelSubmitBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Saving...';
+
+  // Handle Logo File Upload to Google Drive if selected
+  if (logoFileInput.files && logoFileInput.files[0]) {
+    const file = logoFileInput.files[0];
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      const base64 = evt.target.result;
+      API.uploadChannelLogo(file.name, base64, file.type).then(uploadedUrl => {
+        payload.logo = uploadedUrl;
+        saveChannelPayload(id, payload);
+      }).catch(err => {
+        showToast('Logo upload failed: ' + err.message, 'error');
+        saveChannelPayload(id, payload);
+      });
+    };
+    reader.readAsDataURL(file);
+  } else {
+    saveChannelPayload(id, payload);
+  }
+}
+
+function saveChannelPayload(id, payload) {
+  const isEdit = Boolean(id);
+  const promise = isEdit ? API.updateChannel(id, payload) : API.addChannel(payload);
+
+  promise.then(() => {
+    showToast(isEdit ? 'Channel updated successfully' : 'Channel added successfully', 'success');
+    closeModal('channelModalOverlay');
+    document.getElementById('channelSubmitBtn').disabled = false;
+    document.getElementById('channelSubmitBtn').textContent = 'Save Channel';
+    loadAdminDashboard();
+    bootstrapApp(); // Refresh public cache
+  }).catch(err => {
+    showToast('Failed to save channel: ' + err.message, 'error');
+    document.getElementById('channelSubmitBtn').disabled = false;
+    document.getElementById('channelSubmitBtn').textContent = 'Save Channel';
+  });
+}
+
+function toggleChannelActiveStatus(id) {
+  API.toggleChannelStatus(id).then(status => {
+    showToast(`Channel status set to ${status ? 'Active' : 'Disabled'}`, 'info');
+    loadAdminDashboard();
+    bootstrapApp();
+  }).catch(err => showToast('Toggle status failed: ' + err.message, 'error'));
+}
+
+function toggleChannelFeaturedStatus(id) {
+  API.toggleFeatured(id).then(featured => {
+    showToast(`Channel featured set to ${featured ? 'Featured' : 'Standard'}`, 'info');
+    loadAdminDashboard();
+    bootstrapApp();
+  }).catch(err => showToast('Toggle featured failed: ' + err.message, 'error'));
+}
+
+function confirmDeleteChannel(id, name) {
+  let channelName = name;
+  if (!channelName && AppState.adminData && AppState.adminData.channels) {
+    const found = AppState.adminData.channels.find(c => c.id === id);
+    if (found) channelName = found.name;
+  }
+  channelName = channelName || id;
+
+  document.getElementById('confirmModalTitle').textContent = 'Delete Channel';
+  document.getElementById('confirmModalMessage').textContent = `Are you sure you want to delete "${channelName}"? This action cannot be undone.`;
+  document.getElementById('confirmModalBtn').onclick = () => {
+    API.deleteChannel(id).then(() => {
+      showToast('Channel deleted successfully', 'success');
+      closeModal('confirmModalOverlay');
+      loadAdminDashboard();
+      bootstrapApp();
+    }).catch(err => showToast('Delete failed: ' + err.message, 'error'));
+  };
+  openModal('confirmModalOverlay');
+}
+
+function handleSettingsFormSubmit(e) {
+  e.preventDefault();
+  const settings = {
+    site_name: document.getElementById('settingSiteName').value,
+    site_description: document.getElementById('settingSiteDesc').value,
+    logo_url: document.getElementById('settingLogoUrl').value,
+    default_category: document.getElementById('settingDefaultCategory').value,
+    default_country: document.getElementById('settingDefaultCountry').value,
+    items_per_page: document.getElementById('settingItemsPerPage').value,
+    maintenance_mode: String(document.getElementById('settingMaintenanceMode').checked)
+  };
+
+  const btn = document.getElementById('settingsSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  API.updateSettings(settings).then(() => {
+    showToast('Settings updated successfully', 'success');
+    btn.disabled = false;
+    btn.textContent = 'Save Settings';
+  }).catch(err => {
+    showToast('Failed to update settings: ' + err.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Save Settings';
+  });
+}
+
+function handleSecurityFormSubmit(e) {
+  e.preventDefault();
+  const cur = document.getElementById('secCurrentPass').value;
+  const neu = document.getElementById('secNewPass').value;
+  const pin = document.getElementById('secNewPin').value.trim();
+  const btn = document.getElementById('secSaveBtn');
+
+  btn.disabled = true;
+  btn.textContent = 'Updating...';
+
+  API.updateAdminCredentials(cur, neu, pin).then(() => {
+    showToast('Password and 2FA PIN updated successfully!', 'success');
+    btn.disabled = false;
+    btn.textContent = 'Update Password & 2FA PIN';
+    document.getElementById('securityForm').reset();
+  }).catch(err => {
+    showToast('Update failed: ' + err.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Update Password & 2FA PIN';
+  });
+}
+
+function handleAdminBtnClick() {
+  if (AuthStore.isLoggedIn() || AppState.isAdmin) {
+    Router.navigate('admin');
+  } else {
+    openModal('adminLoginModalOverlay');
+  }
+}
+
+function handleAdminNavClick() {
+  handleAdminBtnClick();
+}
+
+function handleUserAuthBtnClick() {
+  if (UserAuthStore.isLoggedIn()) {
+    openModal('userProfileModalOverlay');
+  } else {
+    openUserLoginModal();
+  }
+}
+
+function openUserLoginModal() {
+  closeModal('userRegisterModalOverlay');
+  closeModal('forgotPasswordModalOverlay');
+  closeModal('adminLoginModalOverlay');
+  const errBox = document.getElementById('userLoginErrorMsg');
+  if (errBox) errBox.style.display = 'none';
+  openModal('userLoginModalOverlay');
+}
+
+function openUserRegisterModal() {
+  closeModal('userLoginModalOverlay');
+  closeModal('forgotPasswordModalOverlay');
+  closeModal('adminLoginModalOverlay');
+  const errBox = document.getElementById('userRegisterErrorMsg');
+  if (errBox) errBox.style.display = 'none';
+  openModal('userRegisterModalOverlay');
+}
+
+function openForgotPasswordModal() {
+  closeModal('userLoginModalOverlay');
+  closeModal('userRegisterModalOverlay');
+  closeModal('adminLoginModalOverlay');
+  const statusBox = document.getElementById('forgotPasswordStatusMsg');
+  if (statusBox) statusBox.style.display = 'none';
+  openModal('forgotPasswordModalOverlay');
+}
+
+function togglePasswordVisibility(fieldId) {
+  const input = document.getElementById(fieldId);
+  if (input) {
+    input.type = input.type === 'password' ? 'text' : 'password';
+  }
+}
+
+function handleUserLoginSubmit(e) {
+  e.preventDefault();
+  const email = document.getElementById('userLoginEmail').value.trim();
+  const pass = document.getElementById('userLoginPassword').value;
+  const btn = document.getElementById('userLoginSubmitBtn');
+  const errBox = document.getElementById('userLoginErrorMsg');
+
+  if (errBox) errBox.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Signing in...';
+
+  API.loginUser(email, pass).then(res => {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Sign In`;
+    if (res && res.success) {
+      UserAuthStore.setUser(res.user, res.token);
+      closeModal('userLoginModalOverlay');
+      showToast(`Welcome back, ${res.user.name || 'Member'}!`, 'success');
+      document.getElementById('userLoginForm').reset();
+    } else {
+      throw new Error(res.message || 'Login failed.');
+    }
+  }).catch(err => {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Sign In`;
+    if (errBox) {
+      errBox.textContent = err.message || 'Invalid email or password.';
+      errBox.style.display = 'block';
+    } else {
+      showToast(err.message, 'error');
+    }
+  });
+}
+
+function handleUserRegisterSubmit(e) {
+  e.preventDefault();
+  const name = document.getElementById('userRegisterName').value.trim();
+  const email = document.getElementById('userRegisterEmail').value.trim();
+  const pass = document.getElementById('userRegisterPassword').value;
+  const confirm = document.getElementById('userRegisterConfirmPassword').value;
+  const btn = document.getElementById('userRegisterSubmitBtn');
+  const errBox = document.getElementById('userRegisterErrorMsg');
+
+  if (pass !== confirm) {
+    if (errBox) {
+      errBox.textContent = 'Passwords do not match.';
+      errBox.style.display = 'block';
+    }
+    return;
+  }
+
+  if (errBox) errBox.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Creating account...';
+
+  API.registerUser(name, email, pass).then(res => {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> Create Account`;
+    if (res && res.success) {
+      UserAuthStore.setUser(res.user, res.token);
+      closeModal('userRegisterModalOverlay');
+      showToast(`Account created! Welcome to StreamFlow, ${res.user.name}!`, 'success');
+      document.getElementById('userRegisterForm').reset();
+    } else {
+      throw new Error(res.message || 'Registration failed.');
+    }
+  }).catch(err => {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> Create Account`;
+    if (errBox) {
+      errBox.textContent = err.message || 'Failed to create account.';
+      errBox.style.display = 'block';
+    } else {
+      showToast(err.message, 'error');
+    }
+  });
+}
+
+function handleForgotPasswordSubmit(e) {
+  e.preventDefault();
+  const email = document.getElementById('forgotPasswordEmail').value.trim();
+  const btn = document.getElementById('forgotPasswordSubmitBtn');
+  const statusBox = document.getElementById('forgotPasswordStatusMsg');
+
+  btn.disabled = true;
+  btn.textContent = 'Dispatching email...';
+  if (statusBox) statusBox.style.display = 'none';
+
+  API.sendPasswordResetEmail(email).then(res => {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send Reset Link`;
+    if (statusBox) {
+      statusBox.style.background = 'rgba(16, 185, 129, 0.1)';
+      statusBox.style.color = '#10B981';
+      statusBox.style.border = '1px solid rgba(16, 185, 129, 0.2)';
+      statusBox.textContent = res.message || 'A password reset link has been dispatched to your email.';
+      statusBox.style.display = 'block';
+    }
+    showToast('Reset link sent! Please check your email inbox.', 'success');
+  }).catch(err => {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send Reset Link`;
+    if (statusBox) {
+      statusBox.style.background = 'rgba(239, 68, 68, 0.1)';
+      statusBox.style.color = '#EF4444';
+      statusBox.style.border = '1px solid rgba(239, 68, 68, 0.2)';
+      statusBox.textContent = err.message || 'Failed to dispatch reset email.';
+      statusBox.style.display = 'block';
+    }
+  });
+}
+
+function renderResetView(token) {
+  const form = document.getElementById('resetPasswordForm');
+  const tokenInput = document.getElementById('resetPasswordToken');
+  const successState = document.getElementById('resetSuccessState');
+  const invalidState = document.getElementById('resetInvalidState');
+  const alertBox = document.getElementById('resetAlertBox');
+
+  if (alertBox) alertBox.style.display = 'none';
+  if (successState) successState.style.display = 'none';
+  if (invalidState) invalidState.style.display = 'none';
+
+  const actualToken = token || (tokenInput ? tokenInput.value : '');
+  if (!actualToken) {
+    if (form) form.style.display = 'none';
+    if (invalidState) invalidState.style.display = 'block';
+    return;
+  }
+
+  if (tokenInput) tokenInput.value = actualToken;
+  if (form) form.style.display = 'block';
+}
+
+function handleResetPasswordSubmit(e) {
+  e.preventDefault();
+  const token = document.getElementById('resetPasswordToken').value.trim();
+  const newPass = document.getElementById('resetNewPassword').value;
+  const confirmPass = document.getElementById('resetConfirmPassword').value;
+  const btn = document.getElementById('resetPasswordSubmitBtn');
+  const alertBox = document.getElementById('resetAlertBox');
+  const form = document.getElementById('resetPasswordForm');
+  const successState = document.getElementById('resetSuccessState');
+
+  if (newPass !== confirmPass) {
+    if (alertBox) {
+      alertBox.style.background = 'rgba(239, 68, 68, 0.1)';
+      alertBox.style.color = '#EF4444';
+      alertBox.style.border = '1px solid rgba(239, 68, 68, 0.2)';
+      alertBox.textContent = 'Passwords do not match.';
+      alertBox.style.display = 'block';
+    }
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Updating password...';
+
+  API.resetPasswordWithToken(token, newPass).then(res => {
+    btn.disabled = false;
+    btn.textContent = 'Update Password';
+    if (form) form.style.display = 'none';
+    if (successState) successState.style.display = 'block';
+    showToast('Password updated successfully!', 'success');
+  }).catch(err => {
+    btn.disabled = false;
+    btn.textContent = 'Update Password';
+    if (alertBox) {
+      alertBox.style.background = 'rgba(239, 68, 68, 0.1)';
+      alertBox.style.color = '#EF4444';
+      alertBox.style.border = '1px solid rgba(239, 68, 68, 0.2)';
+      alertBox.textContent = err.message || 'Failed to update password.';
+      alertBox.style.display = 'block';
+    }
+  });
+}
+
+function handleUserLogout() {
+  UserAuthStore.clear();
+  closeModal('userProfileModalOverlay');
+  showToast('Signed out of account.', 'info');
+}
+
+function handleAdminLoginSubmit(e) {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass = document.getElementById('loginPassword').value;
+  const pin = document.getElementById('loginPin').value.trim();
+  const btn = document.getElementById('adminLoginBtn');
+
+  btn.disabled = true;
+  btn.textContent = 'Verifying...';
+
+  API.loginAdmin(email, pass, pin).then(res => {
+    if (res && res.token) {
+      AuthStore.setToken(res.token, res.email);
+      showToast('Admin authenticated successfully!', 'success');
+      closeModal('adminLoginModalOverlay');
+      btn.disabled = false;
+      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Authenticate & Unlock`;
+      Router.navigate('admin');
+    } else {
+      throw new Error(res.message || 'Login failed.');
+    }
+  }).catch(err => {
+    showToast('Authentication failed: ' + err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Authenticate & Unlock`;
+  });
+}
+
+function handleAdminLogout() {
+  AuthStore.clearToken();
+  showToast('Logged out of Admin Console', 'info');
+  Router.navigate('home');
+}
+
+function triggerDatabaseBackup() {
+  showToast('Creating database backup in Google Drive...', 'info');
+  API.createDatabaseBackup().then(url => {
+    showToast('Database backup created successfully!', 'success');
+  }).catch(err => {
+    showToast('Backup failed: ' + err.message, 'error');
+  });
+}
+
+/* ==========================================================================
+   9. M3U PLAYLIST IMPORT WORKFLOW
+   ========================================================================== */
+function openM3UModal() {
+  document.getElementById('m3uUrlInput').value = '';
+  document.getElementById('m3uTextarea').value = '';
+  document.getElementById('m3uPreviewArea').style.display = 'none';
+  document.getElementById('m3uCommitBtn').style.display = 'none';
+  switchM3uTab('url');
+  openModal('m3uModalOverlay');
+}
+
+function switchM3uTab(mode) {
+  ['url', 'file', 'text'].forEach(m => {
+    const panel = document.getElementById(`m3uPanel-${m}`);
+    const btn = document.getElementById(`m3uTabBtn-${m}`);
+    if (panel) panel.style.display = m === mode ? 'block' : 'none';
+    if (btn) btn.classList.toggle('active', m === mode);
+  });
+}
+
+function fetchM3UFromUrl() {
+  const url = document.getElementById('m3uUrlInput').value.trim();
+  if (!url) {
+    showToast('Please enter a valid M3U playlist URL.', 'error');
+    return;
+  }
+
+  AppState.m3uLastUrl = url;
+  const btn = document.getElementById('m3uFetchUrlBtn');
+  btn.disabled = true;
+  btn.textContent = 'Fetching...';
+  showToast('Fetching and analyzing playlist...', 'info');
+
+  API.fetchAndParseM3UUrl(url).then(report => {
+    renderM3uPreviewReport(report);
+    btn.disabled = false;
+    btn.textContent = 'Fetch & Analyze';
+  }).catch(err => {
+    showToast('Failed to fetch M3U URL: ' + err.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Fetch & Analyze';
+  });
+}
+
+function handleM3UFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  AppState.m3uLastUrl = null;
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    document.getElementById('m3uTextarea').value = evt.target.result;
+    parseM3UContent();
+  };
+  reader.readAsText(file);
+}
+
+function renderM3uPreviewReport(report) {
+  document.getElementById('m3uTotalFound').textContent = report.total_detected;
+  document.getElementById('m3uNewCount').textContent = report.new_count;
+  document.getElementById('m3uDupCount').textContent = report.duplicate_count;
+  document.getElementById('m3uInvalidCount').textContent = report.invalid_count;
+
+  AppState.m3uParsedItems = (report.items || []).filter(item => !item.is_duplicate);
+
+  const tbody = document.getElementById('m3uPreviewTableBody');
+  tbody.innerHTML = (report.items || []).map(item => `
+    <tr>
+      <td><strong>${escapeHtml(item.name)}</strong></td>
+      <td>${escapeHtml(item.category)}</td>
+      <td>${escapeHtml(item.country)}</td>
+      <td>
+        <span style="color: ${item.is_duplicate ? 'var(--warning)' : 'var(--success)'}; font-weight: 700;">
+          ${item.is_duplicate ? 'Duplicate (Skip)' : 'New'}
+        </span>
+      </td>
+    </tr>
+  `).join('');
+
+  document.getElementById('m3uPreviewArea').style.display = 'block';
+  const commitBtn = document.getElementById('m3uCommitBtn');
+  const mainBtn = document.getElementById('m3uMainActionBtn');
+  const mainText = document.getElementById('m3uMainActionText');
+  const countToImport = report.new_count !== undefined ? report.new_count : AppState.m3uParsedItems.length;
+
+  if (countToImport > 0) {
+    if (commitBtn) {
+      commitBtn.style.display = 'inline-flex';
+      commitBtn.textContent = `Import ${countToImport} New Channels`;
+    }
+    if (mainBtn) {
+      mainBtn.style.display = 'inline-flex';
+    }
+    if (mainText) {
+      mainText.textContent = `Import ${countToImport} New Channels`;
+    }
+  } else {
+    if (commitBtn) commitBtn.style.display = 'none';
+    if (mainBtn) mainBtn.style.display = 'none';
+  }
+}
+
+function parseM3UContent() {
+  const content = document.getElementById('m3uTextarea').value;
+  if (!content.trim()) {
+    showToast('Please provide M3U playlist text or upload a file.', 'error');
+    return;
+  }
+
+  AppState.m3uLastUrl = null;
+  showToast('Parsing and checking duplicates...', 'info');
+  API.parseM3U(content).then(report => {
+    renderM3uPreviewReport(report);
+  }).catch(err => {
+    showToast('Failed to parse M3U: ' + err.message, 'error');
+  });
+}
+
+function commitM3UChannels() {
+  const btn = document.getElementById('m3uCommitBtn');
+  const mainBtn = document.getElementById('m3uMainActionBtn');
+  const mainText = document.getElementById('m3uMainActionText');
+
+  const setLoading = (msg) => {
+    if (btn) { btn.disabled = true; btn.textContent = msg; }
+    if (mainBtn) { mainBtn.disabled = true; }
+    if (mainText) { mainText.textContent = msg; }
+    showToast(msg, 'info');
+  };
+
+  const resetLoading = () => {
+    if (btn) { btn.disabled = false; btn.textContent = 'Import Valid Channels'; }
+    if (mainBtn) { mainBtn.disabled = false; }
+    if (mainText) { mainText.textContent = 'Import All New Channels'; }
+  };
+
+  setLoading('Importing channels to Google Sheets database...');
+
+  // If imported via URL, use server-side direct import (handles 10,000+ items seamlessly)
+  if (AppState.m3uLastUrl) {
+    API.importM3UFromUrlDirectly(AppState.m3uLastUrl).then(res => {
+      showToast(`Successfully imported ${res.imported} new channels into database!`, 'success');
+      closeModal('m3uModalOverlay');
+      resetLoading();
+      loadAdminDashboard();
+      bootstrapApp();
+    }).catch(err => {
+      showToast('Import failed: ' + err.message, 'error');
+      resetLoading();
+    });
+  } else if (AppState.m3uParsedItems && AppState.m3uParsedItems.length > 0) {
+    API.commitM3UImport(AppState.m3uParsedItems).then(count => {
+      showToast(`Successfully imported ${count} channels!`, 'success');
+      closeModal('m3uModalOverlay');
+      resetLoading();
+      loadAdminDashboard();
+      bootstrapApp();
+    }).catch(err => {
+      showToast('Import failed: ' + err.message, 'error');
+      resetLoading();
+    });
+  } else {
+    showToast('No new channels to import.', 'info');
+    resetLoading();
+  }
+}
+
+/* ==========================================================================
+   10. MODALS, TOASTS & UTILITIES
+   ========================================================================== */
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('is-active');
+}
+
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('is-active');
+}
+
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `sf-toast sf-toast-${type}`;
+  toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(12px)';
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
+}
+
+function openLegalModal(topic) {
+  const title = document.getElementById('legalModalTitle');
+  const body = document.getElementById('legalModalBody');
+
+  const contentMap = {
+    about: {
+      title: 'About StreamFlow',
+      html: `
+        <p><strong>StreamFlow</strong> is a modern, lightweight broadcast directory and web player platform powered by Google Cloud infrastructure (Google Apps Script, Google Sheets, and Google Drive).</p>
+        <p style="margin-top: 10px;">Our mission is to provide an accessible, high-performance catalog for verified, authorized live broadcasts across sports, news, culture, and entertainment.</p>
+      `
+    },
+    terms: {
+      title: 'Terms of Service',
+      html: `
+        <p>By accessing or using StreamFlow, you agree to these Terms of Service. StreamFlow is provided on an "as-is" and "as-available" basis.</p>
+        <p style="margin-top: 10px;">StreamFlow acts solely as an informational index and web playback interface. We do not retransmit, re-encode, or host media content. Users agree not to misuse or attempt unauthorized disruption of the service.</p>
+      `
+    },
+    privacy: {
+      title: 'Privacy Policy',
+      html: `
+        <p>StreamFlow is designed with privacy-first principles. We do not track users across the web or sell personal data.</p>
+        <p style="margin-top: 10px;">Personal preferences such as <strong>Favorites</strong> and <strong>Watch History</strong> are stored exclusively on your device within your browser's local storage (localStorage) and are never transmitted to external analytics servers.</p>
+      `
+    },
+    dmca: {
+      title: 'DMCA & Copyright Compliance',
+      html: `
+        <p>StreamFlow respects intellectual property rights and only indexes streams that the site operator has authorization or permission to display.</p>
+        <p style="margin-top: 10px;">If you are a copyright owner or authorized representative and believe any stream link displayed on this platform infringes your copyright, please submit a detailed takedown notification to our designated agent. StreamFlow investigates and expeditiously disables disputed links upon receipt of proper legal notice.</p>
+      `
+    },
+    contact: {
+      title: 'Contact Support',
+      html: `
+        <p>For questions, technical inquiries, or authorized stream additions, please contact the platform administration.</p>
+        <p style="margin-top: 10px;">Administrative inquiries are handled directly through authorized Google Apps Script channels.</p>
+      `
+    }
+  };
+
+  const item = contentMap[topic] || contentMap.about;
+  title.textContent = item.title;
+  body.innerHTML = item.html;
+  openModal('legalModalOverlay');
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/* ==========================================================================
+   11. APPLICATION BOOTSTRAP
+   ========================================================================== */
+function bootstrapApp() {
+  // Update year
+  const yearEl = document.getElementById('currentYear');
+  if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+  // Parallel initial data fetching
+  Promise.all([
+    API.getChannels(),
+    API.getCategories(),
+    API.getCountries(),
+    API.getLanguages(),
+    API.getSettings(),
+    API.isAdmin()
+  ]).then(([channels, categories, countries, languages, settings, isAdmin]) => {
+    AppState.channels = channels || [];
+    AppState.categories = categories || [];
+    AppState.countries = countries || [];
+    AppState.languages = languages || [];
+    AppState.settings = settings || {};
+    AppState.isAdmin = Boolean(isAdmin) || AuthStore.isLoggedIn();
+
+    if (AppState.isAdmin || AuthStore.isLoggedIn()) {
+      updateAdminNavUI(true, AuthStore.getEmail());
+    } else {
+      updateAdminNavUI(false);
+    }
+
+    // Initialize User Navigation UI
+    updateUserNavUI();
+
+    // Apply custom site name from settings if present
+    if (settings && settings.site_name) {
+      document.title = `${settings.site_name} — Live TV`;
+    }
+
+    // Route according to initial hash or default to home
+    Router.handleHashChange();
+
+    // In Google Apps Script environment, listen to location parameters
+    if (typeof google !== 'undefined' && google.script && google.script.url) {
+      try {
+        google.script.url.getLocation(function(location) {
+          if (location && location.parameter && location.parameter.view) {
+            Router.navigate(location.parameter.view, location.parameter);
+          }
+        });
+      } catch (e) {}
+    }
+  }).catch(err => {
+    console.error('Bootstrap error:', err);
+    updateUserNavUI();
+    Router.handleHashChange();
+  });
+}
+
+// Global Event Listeners
+window.addEventListener('DOMContentLoaded', () => {
+  bootstrapApp();
+});
+
+window.addEventListener('hashchange', () => {
+  Router.handleHashChange();
+});
+
+// Shortcut: press '/' to search
+window.addEventListener('keydown', (e) => {
+  if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+    e.preventDefault();
+    Router.navigate('search');
+  }
+});
+</script>
