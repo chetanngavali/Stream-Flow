@@ -57,3 +57,19 @@ apps/api/data/cache/
 
 # Cache
 .cache/
+
+# StreamFlow Apps Script Source Code & Clasp (Protected - do not push to GitHub)
+StreamFlow/*.gs
+StreamFlow/*.html
+StreamFlow/appsscript.json
+StreamFlow/.clasp.json
+StreamFlow/.clasp.json.bak
+StreamFlow/.claspignore
+StreamFlow/.clasprc.json
+
+# Environment variables & secrets (All pushes)
+.env
+.env.*
+*.env
+.env.example
+*.local

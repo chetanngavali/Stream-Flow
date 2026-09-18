@@ -1,0 +1,25 @@
+# Google Apps Script & Clasp configuration (Do not push to GitHub)
+.clasp.json
+.clasp.json.bak
+.clasprc.json
+.claspignore
+appsscript.json
+
+# Environment variables & secrets
+.env
+.env.*
+*.env
+.env.example
+*.local
+
+# Source code files (Protected - do not push to public GitHub repo)
+*.gs
+*.html
+
+# IDE & system files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+DEPLOYMENT.md
