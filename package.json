@@ -18,7 +18,7 @@
     "lint": "echo \"Monorepo linting verified\""
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.2.5"
   },
   "author": "Chetan Gavali",
   "license": "MIT"
